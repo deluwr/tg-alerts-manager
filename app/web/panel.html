@@ -114,24 +114,43 @@ pre.code{margin:0;background:var(--code);color:var(--code-text);border-radius:va
 .kv{display:grid;grid-template-columns:minmax(120px,170px) 1fr;gap:6px 16px;font-size:14px}
 .kv dt{color:var(--muted);font-family:var(--mono);font-size:12.5px;padding-top:1px}.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
 
-/* маршруты */
-.route{display:grid;grid-template-columns:40px minmax(0,1fr);gap:16px;padding:16px 20px;border-top:1px solid var(--line)}
-.route:first-child{border-top:0}
-.ord{display:flex;flex-direction:column;align-items:center;gap:4px}
-.ord .num{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:600;padding:2px 0}
-.route-main{display:flex;flex-direction:column;gap:12px;min-width:0}
-.route-top{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
-.route-top .thr{flex:1 1 320px}
-.thr-in{display:flex;gap:8px}
-.thr-in .inp:first-child{flex:1;min-width:100px}
-.thr-in select{width:auto;max-width:220px;flex:none}
-.tn{font-size:12.5px;color:var(--muted);min-height:18px}
-.route-acts{display:flex;gap:8px;align-items:center;padding-bottom:20px}
-.conds{display:flex;flex-direction:column;gap:8px}
-.cond{display:grid;grid-template-columns:180px minmax(0,1fr) 30px;gap:8px;align-items:start}
-.cond textarea.inp{min-height:38px;height:38px;padding:8px 12px}
+.inp.sm{min-height:32px;font-size:13px;padding:0 10px}
+textarea.inp.sm{min-height:32px;height:32px;padding:6px 10px;resize:none;overflow:hidden}
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:2px;gap:2px;flex-wrap:wrap;align-self:flex-start}
+.seg button{font:inherit;font-family:var(--mono);font-size:12.5px;border:0;background:transparent;color:var(--muted);padding:0 14px;border-radius:3px;min-height:32px;cursor:pointer;transition:background-color 150ms,color 150ms}
+.seg button:hover:not(.on){color:var(--text);background:var(--surface2)}
+.seg button.on{background:var(--accent);color:var(--accent-ink);font-weight:600}
+
+/* маршруты: строка-сводка, по клику — редактор под ней */
+.rt-head,.rt-row{display:grid;grid-template-columns:56px minmax(150px,1fr) minmax(0,2.3fr) auto;gap:16px;align-items:center;padding:0 20px}
+.rt-head{font-family:var(--mono);font-size:11.5px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding-top:8px;padding-bottom:8px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--surface2) 45%,transparent)}
+.rt{border-top:1px solid var(--line)}.rt:first-child{border-top:0}
+.rt-row{min-height:50px;padding-top:8px;padding-bottom:8px;cursor:pointer;transition:background-color 150ms}
+.rt-row:hover{background:color-mix(in srgb,var(--surface2) 50%,transparent)}
+.rt.open>.rt-row{background:var(--accent-bg)}
+.rt.drag{opacity:.4}.rt.over{box-shadow:inset 0 2px 0 var(--accent)}
+.rt-n{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);display:flex;align-items:center;gap:8px}
+.grip{color:var(--muted);font-weight:400;cursor:grab;user-select:none}
+.rt-thr{display:flex;flex-wrap:wrap;gap:2px 12px;min-width:0}
+.tc{display:inline-flex;gap:6px;align-items:baseline;font-size:14px;white-space:nowrap}
+.tc b{font-weight:500}.tc .mono{color:var(--muted);font-size:12px}
+.rt-cond{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}
+.cc{display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:4px;font-family:var(--mono);font-size:12.5px;padding:2px 8px;border-radius:3px;background:var(--bg);border:1px solid var(--line);max-width:100%}
+.cc .cl{color:var(--muted)}.cc .cl::after{content:' ='}
+.cc i{font-style:normal;color:var(--muted)}.cc .cv{overflow-wrap:anywhere}
+.and{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.rt-acts{display:flex;gap:2px;align-items:center;justify-content:flex-end;white-space:nowrap}
+.rt-edit{padding:16px 20px 18px 92px;display:flex;flex-direction:column;gap:16px;border-top:1px dashed var(--line);background:color-mix(in srgb,var(--surface2) 22%,transparent)}
+.ed-sec{display:flex;flex-direction:column;gap:8px}
+.ed-h{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:var(--r);padding:4px 10px;cursor:pointer;display:inline-flex;gap:6px;align-items:baseline;transition:background-color 150ms,border-color 150ms,color 150ms}
+.chip:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.chip .mono{color:var(--muted);font-size:11.5px}
+.chip.on{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}.chip.on .mono{color:inherit}
+.cond{display:grid;grid-template-columns:200px minmax(0,1fr) 30px;gap:8px;align-items:start}
 .cond .lab{display:flex;flex-direction:column;gap:6px}
-.cond-head{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:8px}
+#rtFilter{width:230px}
 .empty{padding:28px 20px;text-align:center;color:var(--muted);font-size:14px}
 .ev{display:grid;grid-template-columns:150px 70px minmax(0,1fr);gap:12px;padding:8px 20px;border-top:1px solid var(--line);font-size:13px}
 .ev:first-child{border-top:0}
@@ -144,8 +163,11 @@ pre.code{margin:0;background:var(--code);color:var(--code-text);border-radius:va
   .topbar{grid-template-columns:minmax(0,1fr);grid-template-areas:'brand' 'end' 'nav';position:static}
   .brand{padding-top:14px}.topbar-end{justify-content:flex-start;padding:8px 0 12px}
   .topbar-end .btn{margin-left:auto}#tQ{display:none}
-  .route{grid-template-columns:1fr;padding:14px 16px}.ord{flex-direction:row}
-  .route-acts{padding-bottom:0}
+  .rt-head{display:none}
+  .rt-row{grid-template-columns:auto minmax(0,1fr);gap:6px 12px;padding:10px 16px}
+  .rt-cond,.rt-acts{grid-column:1/-1}.rt-acts{justify-content:flex-start;flex-wrap:wrap}
+  .rt-edit{padding:14px 16px}
+  #rtFilter{width:100%}
   .cond{grid-template-columns:minmax(0,1fr) 30px}.cond .lab{grid-column:1/-1}
   .ev{grid-template-columns:1fr;gap:2px;padding:8px 16px}
   .kv{grid-template-columns:1fr}
@@ -182,14 +204,22 @@ pre.code{margin:0;background:var(--code);color:var(--code-text);border-radius:va
     </div>
   </div>
   <div class="card">
-    <div class="card-head"><h2>маршруты</h2><div class="flex"><button class="btn sm" onclick="addRoute({conditions:[{label:'alertname',values:[]}]})">+ маршрут</button><button class="btn sm pri" onclick="saveRoutes(this)">сохранить</button></div></div>
+    <div class="card-head"><h2>маршруты</h2>
+      <div class="flex" style="gap:8px">
+        <input class="inp sm" id="rtFilter" placeholder="фильтр: тема, label, значение" oninput="renderRoutes()" autocomplete="off">
+        <span class="tag warn" id="rtDirty" hidden>не сохранено</span>
+        <button class="btn sm" onclick="newRoute()">+ маршрут</button>
+        <button class="btn sm pri" onclick="saveRoutes(this)">сохранить</button>
+      </div>
+    </div>
+    <div class="rt-head"><span>#</span><span>куда</span><span>условия</span><span></span></div>
     <div id="routes"></div>
     <div class="row">
       <div class="row-text"><b class="small">Ни один маршрут не подошёл</b><span class="k">Тред по умолчанию; пусто — General.</span></div>
       <div class="flex"><input class="inp mono" id="default_thread" placeholder="General" style="width:140px" autocomplete="off" data-lpignore="true"><button class="btn sm" onclick="testThread(this,$('#default_thread').value)">тест</button></div>
     </div>
   </div>
-  <p class="k">В маршруте может быть несколько условий — алерт должен совпасть со всеми. Значения внутри условия — по одному в строке, хватит любого; <code>*</code> — маска. Треды в списке — те, где бот уже видел сообщения; нужного нет — отправьте в тему <code>/id</code>.</p>
+  <p class="k">Нажмите на маршрут, чтобы изменить; порядок — перетаскиванием за ⠿ или стрелками. Условия маршрута соединяются «и», значения внутри условия — «или», <code>*</code> — маска. Темы в списке — те, где бот уже видел сообщения; нужной нет — отправьте в неё <code>/id</code>.</p>
 </section>
 
 <section class="page" data-page="telegram" hidden>
@@ -249,18 +279,22 @@ pre.code{margin:0;background:var(--code);color:var(--code-text);border-radius:va
 </section>
 
 <section class="page" data-page="cert" hidden>
-  <div class="page-head"><h1>Сертификат</h1><p>Панель и вебхук работают по HTTPS. Без домена — самоподписанный сертификат.</p></div>
+  <div class="page-head"><h1>Сертификат</h1><p>Панель и вебхук работают по HTTPS. Let's Encrypt выпускается на IP сервера или на домен.</p></div>
   <div class="split">
     <div class="card wide">
-      <div class="card-head"><h2>let's encrypt</h2></div>
+      <div class="card-head"><h2>https</h2><span class="tag" id="certTag"></span></div>
       <div class="pad stack">
-        <dl class="kv" id="certInfo"></dl>
+        <div class="seg" id="tlsSeg" role="radiogroup" aria-label="Сертификат"><button data-mode="ip">на IP</button><button data-mode="domain">на домен</button><button data-mode="self">самоподписанный</button></div>
+        <p class="small muted" id="tlsHint"></p>
         <div class="grid g2">
-          <label class="fld">Домен или IP сервера <input class="inp mono" id="domain" placeholder="alerts.example.com" autocomplete="off"></label>
-          <label class="fld">E-mail для Let's Encrypt (необязательно) <input class="inp" id="le_email" autocomplete="off"></label>
+          <label class="fld" data-for="ip">IP сервера <input class="inp mono" id="public_ip" autocomplete="off"></label>
+          <label class="fld" data-for="domain">Домен <input class="inp mono" id="domain" placeholder="alerts.example.com" autocomplete="off"></label>
+          <label class="fld" data-for="le">E-mail для Let's Encrypt (необязательно) <input class="inp" id="le_email" autocomplete="off"></label>
         </div>
-        <div class="flex"><button class="btn pri" onclick="cert(this,false)">выпустить / продлить</button><button class="btn" onclick="cert(this,true)">принудительно</button><button class="btn ghost" onclick="saveDomain(this)">только сохранить домен</button></div>
-        <p class="k">Домен должен указывать на этот сервер. На время проверки certbot останавливает службу на порту 80 и запускает её обратно. Продление — таймер <code>tgam-certbot-renew</code>, дважды в сутки.</p>
+        <div id="certWarn" class="stack" style="gap:8px"></div>
+        <div class="flex"><button class="btn pri" id="certBtn" onclick="cert(this,false)">выпустить</button><button class="btn" id="certForce" onclick="cert(this,true)">перевыпустить принудительно</button></div>
+        <dl class="kv" id="certInfo"></dl>
+        <p class="k">На время проверки certbot останавливает службу на порту 80 и сразу запускает обратно. Продление — таймер <code>tgam-certbot-renew</code> дважды в сутки, панель подхватывает новый сертификат без перезапуска. С консоли: <code>tgam cert</code>.</p>
       </div>
     </div>
     <div class="card narrow">
@@ -316,11 +350,12 @@ pre.code{margin:0;background:var(--code);color:var(--code-text);border-radius:va
     </div>
     <div class="narrow stack" style="gap:20px">
       <div class="card">
-        <div class="card-head"><h2>пароль</h2></div>
+        <div class="card-head"><h2>вход в панель</h2></div>
         <div class="pad stack">
-          <p class="small">Логин: <code id="panelUser"></code></p>
+          <label class="fld">Логин <input class="inp mono" id="newuser" autocomplete="off" data-lpignore="true"></label>
           <label class="fld">Новый пароль <input class="inp" id="newpw" type="password" autocomplete="new-password"></label>
-          <div><button class="btn" onclick="setPw(this)">сменить пароль</button></div>
+          <div><button class="btn" onclick="setPw(this)">сохранить</button></div>
+          <p class="k">После смены войдите заново. С консоли: <code>tgam password</code>.</p>
         </div>
       </div>
       <div class="card">
@@ -368,37 +403,76 @@ function setTheme(t){try{localStorage.setItem('tgam.theme',t)}catch(e){}applyThe
 $('#theme').innerHTML=THEMES.map(([id,n])=>`<option value="${id}">${n}</option>`).join('');$('#theme').value=themeId();applyTheme(themeId());
 matchMedia('(prefers-color-scheme: light)').addEventListener('change',()=>themeId()==='system'&&applyTheme('system'));
 
-/* маршруты */
-let THREADS=[],threadsKey='';
+/* маршруты: список в памяти; строка — сводка (куда и при каких labels), по клику — редактор под строкой */
+let THREADS=[],threadsKey='',ROUTES=[],OPEN=null,DIRTY=false,DRAG=null;
 const LABELS=['alertname','service','grafana_folder'];
-function threadOptions(){return '<option value="">+ тред…</option>'+THREADS.filter(t=>t.thread_id).map(t=>`<option value="${esc(t.thread_id)}">${esc(t.topic||'Тема')} · ${esc(t.thread_id)}</option>`).join('')}
 function splitIds(s){return String(s).split(',').map(x=>x.trim()).filter(Boolean)}
-function threadNames(ids){return ids.map(id=>{const t=THREADS.find(x=>String(x.thread_id)===id);return t?(t.topic||'тред '+id):id+' — нет в списке'}).join(', ')}
-function tnames(inp){inp.closest('.thr').querySelector('.tn').textContent=threadNames(splitIds(inp.value))||'Без треда маршрут выключен (если не отмечен General)'}
-function tsel(sel){const inp=sel.parentElement.querySelector('[data-k=thread_id]'),ids=splitIds(inp.value);if(sel.value&&!ids.includes(sel.value))ids.push(sel.value);inp.value=ids.join(', ');sel.value='';tnames(inp)}
-function testRoute(btn){const d=btn.closest('.route'),ids=splitIds(d.querySelector('[data-k=thread_id]').value);if(d.querySelector('[data-k=general]').checked)ids.push('0');testThread(btn,ids.join(','))}
-function condHTML(c){const lab=c.label||'alertname',custom=!LABELS.includes(lab);
- return `<div class="cond"><div class="lab"><select class="inp mono" data-k="label" onchange="labelChange(this)">${[...LABELS,'__custom'].map(x=>`<option value="${x}"${(custom?x==='__custom':x===lab)?' selected':''}>${x==='__custom'?'свой label…':x}</option>`).join('')}</select><input class="inp mono" data-k="label_custom" value="${custom?esc(lab):''}" placeholder="имя label"${custom?'':' hidden'}></div><textarea class="inp" data-k="values" rows="1" placeholder="значения, по одному в строке" oninput="grow(this)">${esc((c.values||[]).join('\n'))}</textarea><button class="btn sm icon ghost" title="Убрать условие" onclick="this.closest('.cond').remove()">✕</button></div>`}
-function grow(t){t.style.height='38px';t.style.height=Math.min(t.scrollHeight+2,180)+'px'}
-function labelChange(sel){sel.closest('.cond').querySelector('[data-k=label_custom]').hidden=sel.value!=='__custom'}
-function addCond(btn){const box=btn.closest('.route-main').querySelector('.conds');box.insertAdjacentHTML('beforeend',condHTML({label:'alertname',values:[]}));box.lastElementChild.querySelector('textarea').focus()}
-function addRoute(r){$('#routes .empty')?.remove();const d=document.createElement('div');d.className='route';
- const conds=r.conditions??(r.label?[{label:r.label,values:r.values??(r.value!=null?[r.value]:[])}]:[]);
- d.innerHTML=`<div class="ord"><button class="btn sm icon ghost" title="Выше" onclick="moveRoute(this,-1)">▲</button><span class="num"></span><button class="btn sm icon ghost" title="Ниже" onclick="moveRoute(this,1)">▼</button></div>
- <div class="route-main">
-  <div class="route-top">
-   <label class="fld thr">Тред (thread_id, через запятую)<span class="thr-in"><input class="inp mono" data-k="thread_id" value="${esc(r.thread_id)}" placeholder="12, 34" oninput="tnames(this)" autocomplete="off"><select class="inp" onchange="tsel(this)">${threadOptions()}</select></span><span class="tn"></span></label>
-   <div class="route-acts"><label class="cb"><input type="checkbox" data-k="general"${r.general?' checked':''}> ещё и в General</label><button class="btn sm" onclick="testRoute(this)">тест</button><button class="btn sm danger" onclick="this.closest('.route').remove();renumber()">удалить</button></div>
+function topicOf(id){const t=THREADS.find(x=>String(x.thread_id)===String(id));return t?t.topic:''}
+function normRoute(r){const conds=r.conditions??(r.label?[{label:r.label,values:r.values??(r.value!=null?[r.value]:[])}]:[]);
+ return{thread_id:r.thread_id||'',general:!!r.general,conditions:conds.map(c=>({label:c.label||'',values:[...(c.values||[])]}))}}
+function dirty(on=true){DIRTY=on;$('#rtDirty').hidden=!on}
+addEventListener('beforeunload',e=>{if(DIRTY){e.preventDefault();e.returnValue=''}});
+function grow(t){t.style.height='32px';t.style.height=Math.min(t.scrollHeight+2,180)+'px'}
+function thrHTML(r){const p=splitIds(r.thread_id).map(id=>{const n=topicOf(id);return `<span class="tc"><b${n?'':' class="muted"'}>${esc(n||'тема')}</b><span class="mono">${esc(id)}</span></span>`});
+ if(r.general)p.push('<span class="tc"><b>General</b></span>');
+ return p.join('')||'<span class="tag warn">не выбрано — выключен</span>'}
+function condsHTML(r){const cs=r.conditions.filter(c=>c.label);
+ if(!cs.length)return '<span class="tag warn">нет условий — выключен</span>';
+ return cs.map(c=>`<span class="cc"><span class="cl">${esc(c.label)}</span>${c.values.length?c.values.map(v=>`<span class="cv">${esc(v)}</span>`).join('<i>|</i>'):'<span class="cv muted">пусто</span>'}</span>`).join('<span class="and">и</span>')}
+function routeText(r){return [...splitIds(r.thread_id).map(id=>id+' '+topicOf(id)),r.general?'general':'',...r.conditions.map(c=>c.label+' '+c.values.join(' '))].join(' ').toLowerCase()}
+function renderRoutes(){const box=$('#routes'),q=$('#rtFilter').value.trim().toLowerCase();
+ if(!ROUTES.length){box.innerHTML='<div class="empty">Маршрутов нет — все алерты идут в тред по умолчанию. Добавьте первый: «+ маршрут».</div>';return}
+ box.innerHTML=ROUTES.map((r,i)=>{const open=r===OPEN;if(q&&!open&&!routeText(r).includes(q))return '';
+  return `<div class="rt${open?' open':''}" data-i="${i}" draggable="${!open&&!q}">
+  <div class="rt-row" onclick="toggleRoute(${i})">
+   <span class="rt-n"><span class="grip" title="Перетащите, чтобы изменить приоритет">⠿</span>${i+1}</span>
+   <span class="rt-thr">${thrHTML(r)}</span>
+   <span class="rt-cond">${condsHTML(r)}</span>
+   <span class="rt-acts" onclick="event.stopPropagation()"><button class="btn sm icon ghost" title="Выше" onclick="moveRoute(${i},${i-1})"${i?'':' disabled'}>▲</button><button class="btn sm icon ghost" title="Ниже" onclick="moveRoute(${i},${i+1})"${i<ROUTES.length-1?'':' disabled'}>▼</button><button class="btn sm ghost" onclick="testRoute(${i},this)">тест</button><button class="btn sm ghost" onclick="toggleRoute(${i})">${open?'свернуть':'изменить'}</button></span>
+  </div>${open?editorHTML(r,i):''}</div>`}).join('')||'<div class="empty">Ничего не найдено</div>';
+ bindDnD();document.querySelectorAll('#routes .rt-edit textarea').forEach(grow)}
+function editorHTML(r,i){const ids=splitIds(r.thread_id),known=THREADS.filter(t=>t.thread_id);
+ return `<div class="rt-edit">
+  <div class="ed-sec"><div class="ed-h">куда отправлять</div>
+   <div class="chips">${known.map(t=>`<button class="chip${ids.includes(String(t.thread_id))?' on':''}" onclick="toggleThread(${i},'${esc(t.thread_id)}')">${esc(t.topic||'Тема')}<span class="mono">${esc(t.thread_id)}</span></button>`).join('')}<button class="chip${r.general?' on':''}" onclick="toggleGeneral(${i})">General</button></div>
+   <input class="inp mono sm" value="${esc(r.thread_id)}" placeholder="thread_id через запятую — для тем, которых нет в списке" oninput="setThreads(${i},this.value)" autocomplete="off" style="max-width:420px">
+   ${known.length?'':'<p class="k">Бот ещё не видел тем: отправьте /id в нужной теме группы — она появится здесь.</p>'}
   </div>
-  <div class="cond-head"><span>условия — алерт должен совпасть со всеми</span><button class="btn sm ghost" onclick="addCond(this)">+ условие</button></div>
-  <div class="conds">${conds.map(condHTML).join('')}</div>
- </div>`;
- $('#routes').append(d);tnames(d.querySelector('[data-k=thread_id]'));d.querySelectorAll('textarea').forEach(grow);renumber()}
-function moveRoute(btn,dir){const d=btn.closest('.route'),sib=dir<0?d.previousElementSibling:d.nextElementSibling;if(!sib||!sib.classList.contains('route'))return;dir<0?sib.before(d):sib.after(d);renumber()}
-function renumber(){const rs=[...document.querySelectorAll('#routes .route')];rs.forEach((d,i)=>d.querySelector('.num').textContent=i+1);if(!rs.length)$('#routes').innerHTML='<div class="empty">Маршрутов нет — все алерты идут в тред по умолчанию.</div>'}
-function routes(){return[...document.querySelectorAll('#routes .route')].map(d=>({thread_id:d.querySelector('[data-k=thread_id]').value,general:d.querySelector('[data-k=general]').checked,
- conditions:[...d.querySelectorAll('.cond')].map(c=>{const l=c.querySelector('[data-k=label]').value;return{label:l==='__custom'?c.querySelector('[data-k=label_custom]').value.trim():l,values:c.querySelector('[data-k=values]').value.split('\n').map(s=>s.trim()).filter(Boolean)}})}))}
-async function saveRoutes(btn){await busy(btn,async()=>{await api('/api/routes',{routes:routes()});await api('/api/settings',{default_thread:$('#default_thread').value});toast('Маршруты сохранены')})}
+  <div class="ed-sec"><div class="ed-h">условия — алерт должен совпасть со всеми</div>
+   ${r.conditions.map((c,j)=>condHTML(c,i,j)).join('')}
+   <div><button class="btn sm ghost" onclick="addCond(${i})">+ условие</button></div>
+  </div>
+  <div class="flex" style="gap:8px"><button class="btn sm pri" onclick="toggleRoute(${i})">готово</button><button class="btn sm danger" onclick="delRoute(${i})">удалить маршрут</button></div>
+ </div>`}
+function condHTML(c,i,j){const custom=c._custom||(c.label&&!LABELS.includes(c.label));
+ return `<div class="cond"><div class="lab"><select class="inp mono sm" onchange="setLabel(${i},${j},this.value)">${LABELS.map(x=>`<option${!custom&&x===c.label?' selected':''}>${x}</option>`).join('')}<option value="__custom"${custom?' selected':''}>свой label…</option></select>${custom?`<input class="inp mono sm" placeholder="имя label" value="${esc(c.label)}" oninput="setCustom(${i},${j},this.value)" autocomplete="off">`:''}</div>
+  <textarea class="inp mono sm" rows="1" placeholder="значения, по одному в строке; * — маска" oninput="setValues(${i},${j},this)">${esc(c.values.join('\n'))}</textarea>
+  <button class="btn sm icon ghost" title="Убрать условие" onclick="delCond(${i},${j})">✕</button></div>`}
+function toggleRoute(i){OPEN=OPEN===ROUTES[i]?null:ROUTES[i];renderRoutes()}
+function refreshRow(i){dirty();const el=document.querySelector(`#routes .rt[data-i="${i}"]`);if(!el)return;el.querySelector('.rt-thr').innerHTML=thrHTML(ROUTES[i]);el.querySelector('.rt-cond').innerHTML=condsHTML(ROUTES[i])}
+function toggleThread(i,id){const ids=splitIds(ROUTES[i].thread_id),k=ids.indexOf(id);k<0?ids.push(id):ids.splice(k,1);ROUTES[i].thread_id=ids.join(', ');dirty();renderRoutes()}
+function toggleGeneral(i){ROUTES[i].general=!ROUTES[i].general;dirty();renderRoutes()}
+function setThreads(i,v){ROUTES[i].thread_id=v;refreshRow(i)}
+function setLabel(i,j,v){const c=ROUTES[i].conditions[j];c._custom=v==='__custom';c.label=c._custom?'':v;dirty();renderRoutes();
+ if(c._custom)document.querySelectorAll('#routes .rt.open .cond')[j]?.querySelector('input')?.focus()}
+function setCustom(i,j,v){ROUTES[i].conditions[j].label=v.trim();refreshRow(i)}
+function setValues(i,j,t){ROUTES[i].conditions[j].values=t.value.split('\n').map(s=>s.trim()).filter(Boolean);grow(t);refreshRow(i)}
+function addCond(i){const used=ROUTES[i].conditions.map(c=>c.label);ROUTES[i].conditions.push({label:LABELS.find(l=>!used.includes(l))||'alertname',values:[]});dirty();renderRoutes();
+ const cs=document.querySelectorAll('#routes .rt.open .cond');cs[cs.length-1]?.querySelector('textarea').focus()}
+function delCond(i,j){ROUTES[i].conditions.splice(j,1);dirty();renderRoutes()}
+function delRoute(i){if(!confirm('Удалить маршрут?'))return;if(ROUTES[i]===OPEN)OPEN=null;ROUTES.splice(i,1);dirty();renderRoutes()}
+function newRoute(){const r={thread_id:'',general:false,conditions:[{label:'alertname',values:[]}]};ROUTES.push(r);OPEN=r;$('#rtFilter').value='';dirty();renderRoutes();
+ document.querySelector('#routes .rt.open')?.scrollIntoView({block:'nearest'})}
+function moveRoute(from,to){if(to<0||to>=ROUTES.length)return;const [r]=ROUTES.splice(from,1);ROUTES.splice(to,0,r);dirty();renderRoutes()}
+function bindDnD(){document.querySelectorAll('#routes .rt[draggable="true"]').forEach(el=>{
+ el.ondragstart=e=>{DRAG=+el.dataset.i;el.classList.add('drag');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','')};
+ el.ondragend=()=>{DRAG=null;document.querySelectorAll('#routes .rt').forEach(x=>x.classList.remove('drag','over'))};
+ el.ondragover=e=>{if(DRAG===null)return;e.preventDefault();el.classList.add('over')};
+ el.ondragleave=()=>el.classList.remove('over');
+ el.ondrop=e=>{e.preventDefault();const to=+el.dataset.i;if(DRAG!==null&&DRAG!==to)moveRoute(DRAG,to)}})}
+function testRoute(i,btn){const ids=splitIds(ROUTES[i].thread_id);if(ROUTES[i].general)ids.push('0');testThread(btn,ids.join(','))}
+function routesPayload(){return ROUTES.map(r=>({thread_id:r.thread_id,general:r.general,conditions:r.conditions.filter(c=>c.label).map(c=>({label:c.label,values:c.values}))}))}
+async function saveRoutes(btn){await busy(btn,async()=>{await api('/api/routes',{routes:routesPayload()});await api('/api/settings',{default_thread:$('#default_thread').value});dirty(false);toast('Маршруты сохранены')})}
 async function testThread(btn,tids){const list=splitIds(tids);if(!list.length)list.push('');
  await busy(btn,async()=>{for(const t of list)await api('/api/test',{thread_id:t});toast('Тест отправлен: '+list.map(t=>t&&t!=='0'?'тред '+t:'General').join(', '))})}
 
@@ -407,7 +481,14 @@ const save=(btn,body,msg)=>busy(btn,async()=>{await api('/api/settings',body);to
 function saveSecret(btn){save(btn,{webhook_secret:$('#webhook_secret').value},'Секрет сохранён')}
 function saveBot(btn){busy(btn,async()=>{await api('/api/settings',{bot_token:$('#bot_token').value,chat_id:$('#chat_id').value});$('#bot_token').value='';toast('Сохранено');refresh();check()})}
 function saveFormat(btn){save(btn,Object.fromEntries(['fmt_firing','fmt_resolved','label_titles','link_titles','tz_offset','hide_labels'].map(k=>[k,$('#'+k).value])),'Формат сохранён')}
-function saveDomain(btn){save(btn,{domain:$('#domain').value,le_email:$('#le_email').value})}
+let TLS='ip';
+const TLS_HINT={ip:'Сертификат на IP сервера: домен не нужен. Выдаётся на 6 дней и продлевается сам за 3 дня до конца. Порт 80 должен быть открыт снаружи.',
+ domain:'A-запись домена должна указывать прямо на IP сервера, без прокси (в Cloudflare — серое облако): иначе порты панели и вебхука через домен недоступны. Порт 80 открыт снаружи.',
+ self:'Без Let\'s Encrypt: браузер покажет предупреждение, а в Grafana нужно включить «Skip TLS verify».'};
+function setMode(m){TLS=m;document.querySelectorAll('#tlsSeg button').forEach(b=>{b.classList.toggle('on',b.dataset.mode===m);b.setAttribute('aria-checked',b.dataset.mode===m)});
+ document.querySelector('[data-for=domain]').hidden=m!=='domain';document.querySelector('[data-for=le]').hidden=m==='self';
+ $('#certBtn').textContent=m==='self'?'применить':'выпустить';$('#certForce').hidden=m==='self';$('#tlsHint').textContent=TLS_HINT[m]}
+document.querySelectorAll('#tlsSeg button').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
 function saveBackup(btn){save(btn,{backup_chat_id:$('#backup_chat_id').value,backup_hours:$('#backup_hours').value})}
 async function sendBackup(btn){await busy(btn,async()=>{await api('/api/settings',{backup_chat_id:$('#backup_chat_id').value,backup_hours:$('#backup_hours').value});await api('/api/backup',{});toast('Бэкап отправлен');refresh()})}
 async function check(btn){await busy(btn,async()=>{$('#checkRes').textContent='проверяю…';try{setTg(await api('/api/check'))}catch(e){setTg({error:e.message})}})}
@@ -418,8 +499,11 @@ function setTg(r){const p=$('#tTg');
   :r.chat?`<div class="alert ${r.forum?'ok':'warn'}">Бот ${esc(r.bot)} на связи. Группа «${esc(r.chat)}»${r.forum?', темы включены':' — темы ВЫКЛЮЧЕНЫ'}</div>`:`<div class="alert info">Бот ${esc(r.bot)} на связи, chat_id не задан</div>`}
 async function saveVless(btn){await busy(btn,async()=>{$('#vlessRes').textContent='применяю…';const r=await api('/api/vless',{vless:$('#vless').value});
  $('#vlessRes').innerHTML=r.warning?`<div class="alert warn">xray перезапущен, но: ${esc(r.warning)}</div>`:`<div class="alert ok">xray перезапущен, Telegram доступен: ${esc(r.bot)}</div>`;if(!r.warning)setTg(r);refresh()})}
-async function cert(btn,force){await busy(btn,async()=>{await api('/api/settings',{domain:$('#domain').value,le_email:$('#le_email').value});await api('/api/cert',{force});toast('certbot запущен');refresh()})}
-async function setPw(btn){await busy(btn,async()=>{await api('/api/password',{password:$('#newpw').value});toast('Пароль изменён, войдите заново');setTimeout(()=>location.reload(),1500)})}
+async function cert(btn,force){await busy(btn,async()=>{
+ await api('/api/settings',{tls_mode:TLS,public_ip:$('#public_ip').value,domain:$('#domain').value,le_email:$('#le_email').value});
+ if(TLS==='self'){toast('Сохранено: самоподписанный сертификат');refresh();return}
+ await api('/api/cert',{force});toast('certbot запущен — ход выпуска в журнале справа');refresh()})}
+async function setPw(btn){await busy(btn,async()=>{await api('/api/password',{user:$('#newuser').value,password:$('#newpw').value});toast('Сохранено, войдите заново');setTimeout(()=>location.reload(),1500)})}
 async function restore(btn){const f=$('#restoreFile').files[0];if(!f){toast('Выберите файл бэкапа',false);return}
  await busy(btn,async()=>{let data;try{data=JSON.parse(await f.text())}catch(e){throw new Error('Файл не JSON')}
   if(!confirm('Заменить текущий конфиг бэкапом и перезапустить панель?'))return;
@@ -446,16 +530,23 @@ function render(s,first){S=s;
  VER=s.update.version;
  $('#hookUrl').textContent=s.hook_url;
  const th=(s.threads||[]).filter(t=>String(t.chat_id)===String(s.chat_id)),tk=JSON.stringify(th);
- if(tk!==threadsKey){threadsKey=tk;THREADS=th;document.querySelectorAll('#routes .thr-in select').forEach(x=>x.innerHTML=threadOptions());document.querySelectorAll('#routes [data-k=thread_id]').forEach(tnames)}
+ if(tk!==threadsKey){threadsKey=tk;THREADS=th;if(!first&&!document.activeElement?.closest('#routes'))renderRoutes()}
  if(first){
-  for(const k of['chat_id','default_thread','webhook_secret','tz_offset','vless','le_email','domain','fmt_firing','fmt_resolved','label_titles','link_titles','backup_chat_id','backup_hours'])$('#'+k).value=s[k]??'';
-  $('#hide_labels').value=(s.hide_labels||[]).join(', ');$('#panelUser').textContent=s.panel_user;
+  for(const k of['chat_id','default_thread','webhook_secret','tz_offset','vless','le_email','domain','public_ip','fmt_firing','fmt_resolved','label_titles','link_titles','backup_chat_id','backup_hours'])$('#'+k).value=s[k]??'';
+  $('#hide_labels').value=(s.hide_labels||[]).join(', ');$('#newuser').value=s.panel_user;setMode(s.tls_mode||'ip');
   $('#bot_token').placeholder=s.bot_token?('задан '+s.bot_token+' — оставьте пустым, чтобы не менять'):'не задан';
-  $('#routes').innerHTML='';(s.routes||[]).forEach(r=>addRoute(r));renumber()}
+  ROUTES=(s.routes||[]).map(normRoute);renderRoutes()}
  const px=$('#tXray');px.textContent='xray'+(s.vless?'':' · напрямую');px.className='tag '+(s.xray==='active'?(s.vless?'ok':'warn'):'fail');
- const c=s.cert,pc=$('#tCert');pc.textContent=c.source==='letsencrypt'?`cert · ${c.days_left} дн.`:'cert · самоподписанный';pc.className='tag '+(c.source==='letsencrypt'&&c.days_left>14?'ok':'warn');
+ const c=s.cert,pc=$('#tCert'),le=c.source==='letsencrypt';
+ pc.textContent=le?`cert · ${c.days_left} дн.`:'cert · самоподписанный';pc.className='tag '+(le&&c.days_left>(c.mode==='ip'?1:14)?'ok':'warn');
+ $('#certTag').textContent=pc.textContent;$('#certTag').className=pc.className;
+ const warn=[];
+ if(c.mode!=='self'&&c.target&&c.cert_for!==c.target)warn.push(`<div class="alert warn small">${c.cert_for?`Сертификат выпущен на ${esc(c.cert_for.split(':')[1])}, а выбрано ${esc(c.target.split(':')[1])}`:'Сертификат Let\'s Encrypt ещё не выпущен'} — нажмите «выпустить».</div>`);
+ if(c.dns)warn.push(c.dns.ok?`<div class="alert ok small">${esc(c.dns.domain)} указывает на этот сервер (${esc(c.dns.ips.join(', '))}).</div>`
+  :`<div class="alert warn small">${c.dns.error?esc(c.dns.error):`${esc(c.dns.domain)} указывает на ${esc(c.dns.ips.join(', '))}, а IP сервера — ${esc(s.public_ip||'не указан')}.`} Если домен за прокси Cloudflare (оранжевое облако), выключите прокси для этой записи: Cloudflare не пропускает порты панели и вебхука.</div>`);
+ $('#certWarn').innerHTML=warn.join('');
  $('#tQ').textContent='очередь · '+s.queue;$('#tQ').className='tag'+(s.queue>20?' warn':'');
- $('#certInfo').innerHTML=`<dt>источник</dt><dd>${c.source==='letsencrypt'?'Let\'s Encrypt':'самоподписанный'}</dd><dt>действует до</dt><dd class="mono">${esc(c.not_after||'—')}${c.days_left!=null?` (${c.days_left} дн.)`:''}</dd><dt>порт 80</dt><dd class="mono">${esc(c.port80)}</dd><dt>таймер продления</dt><dd class="mono">${esc(c.timer)}</dd>${c.running?'<dt>certbot</dt><dd style="color:var(--warn)">работает…</dd>':''}`;
+ $('#certInfo').innerHTML=`<dt>сейчас</dt><dd>${le?'Let\'s Encrypt':'самоподписанный'}</dd><dt>выдан на</dt><dd class="mono">${esc((c.names||[]).join(', ')||'—')}</dd><dt>действует до</dt><dd class="mono">${esc(c.not_after||'—')}${c.days_left!=null?` (${c.days_left} дн.)`:''}</dd><dt>порт 80</dt><dd class="mono">${esc(c.port80)}</dd><dt>таймер продления</dt><dd class="mono">${esc(c.timer)}</dd>${c.running?'<dt>certbot</dt><dd style="color:var(--warn)">работает…</dd>':''}`;
  $('#certLog').textContent=c.log||'—';
  $('#backupLast').textContent=s.backup_last?'последний: '+fmtDate(s.backup_last):'ещё не отправлялся';
  const seen=s.threads||[];

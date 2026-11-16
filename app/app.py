@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import html
 import http.cookies
+import ipaddress
 import json
 import os
 import queue
@@ -55,8 +56,13 @@ def read_version():
 
 VERSION = read_version()
 
+CERT_NAME = 'tgam'  # одна цепочка Let's Encrypt: на IP или на домен, при смене — перевыпуск
+
 DEFAULTS = {
+    'tls_mode': 'ip',  # ip | domain | self — на что выпускать сертификат Let's Encrypt (self — самоподписанный)
+    'public_ip': '',
     'domain': '',
+    'cert_for': '',  # «ip:1.2.3.4» / «domain:x.y» — для чего выпущен текущий сертификат
     'panel_port': 1337,
     'hook_port': 6969,
     'proxy_port': 17777,
@@ -95,14 +101,29 @@ _FAILS = {}  # ip -> время неудачных входов
 
 # ---------- конфиг ----------
 
+def is_ip(s):
+    try:
+        ipaddress.ip_address(str(s).strip())
+        return True
+    except ValueError:
+        return False
+
+
 def load_config():
     with _cfg_lock:
         cfg = json.loads(json.dumps(DEFAULTS))
         try:
             with open(CONFIG_PATH, encoding='utf-8') as f:
-                cfg.update(json.load(f))
+                raw = json.load(f)
         except FileNotFoundError:
-            pass
+            return cfg
+        cfg.update(raw)
+        if 'tls_mode' not in raw:  # конфиг 1.0: в domain лежал либо IP (самоподписанный), либо домен
+            d = str(raw.get('domain') or '')
+            if not d or is_ip(d):
+                cfg.update(tls_mode='self', public_ip=d, domain='')
+            else:
+                cfg['tls_mode'] = 'domain'
         return cfg
 
 
@@ -149,7 +170,10 @@ def run(cmd, timeout=60):
 
 
 def public_host(cfg):
-    return cfg.get('domain') or socket.gethostname()
+    """Адрес для ссылок на панель и вебхук: домен в режиме «домен», иначе IP сервера."""
+    if cfg.get('tls_mode') == 'domain' and cfg.get('domain'):
+        return cfg['domain']
+    return cfg.get('public_ip') or cfg.get('domain') or socket.gethostname()
 
 
 # ---------- Telegram ----------
@@ -535,12 +559,49 @@ def ensure_self_cert(cn):
 
 
 def cert_paths():
-    d = load_config()['domain']
-    if d:
-        c, k = os.path.join(LE_DIR, 'live', d, 'fullchain.pem'), os.path.join(LE_DIR, 'live', d, 'privkey.pem')
-        if os.path.exists(c) and os.path.exists(k):
-            return c, k
+    cfg = load_config()
+    if cfg['tls_mode'] != 'self':
+        for name in (CERT_NAME, cfg['domain']):  # вторая — цепочка 1.0, названная по домену
+            if not name:
+                continue
+            c, k = os.path.join(LE_DIR, 'live', name, 'fullchain.pem'), os.path.join(LE_DIR, 'live', name, 'privkey.pem')
+            if os.path.exists(c) and os.path.exists(k):
+                return c, k
     return SELF_CERT, SELF_KEY
+
+
+def cert_target(cfg):
+    """(вид, значение) — на что выпускать сертификат в текущем режиме."""
+    if cfg['tls_mode'] == 'domain':
+        if not cfg.get('domain'):
+            raise ValueError('укажите домен')
+        if is_ip(cfg['domain']):
+            raise ValueError('в поле домена — IP; для IP выберите режим «на IP»')
+        return 'domain', cfg['domain']
+    if cfg['tls_mode'] == 'ip':
+        if not is_ip(cfg.get('public_ip')):
+            raise ValueError('укажите IP сервера')
+        return 'ip', cfg['public_ip']
+    raise ValueError('выбран самоподписанный сертификат — Let\'s Encrypt не нужен')
+
+
+_DNS = {'at': 0, 'key': None, 'val': None}
+
+
+def dns_check(cfg):
+    """Куда указывает домен: если не на IP сервера — подсказка (чаще всего прокси Cloudflare)."""
+    d, ip = cfg.get('domain'), cfg.get('public_ip')
+    if cfg['tls_mode'] != 'domain' or not d:
+        return None
+    if _DNS['key'] == (d, ip) and time.time() - _DNS['at'] < 60:
+        return _DNS['val']
+    try:
+        ips = sorted({a[4][0] for a in socket.getaddrinfo(d, None, proto=socket.IPPROTO_TCP)})
+        val = {'domain': d, 'ips': ips, 'ok': not ip or ip in ips}
+    except OSError as ex:
+        val = {'domain': d, 'ips': [], 'ok': False, 'error': f'домен не находится в DNS: {ex}'}
+    _DNS.update(at=time.time(), key=(d, ip), val=val)
+    return val
 
 
 class CertHolder:
@@ -579,8 +640,17 @@ def port80_holders():
 
 
 def cert_info():
+    cfg = load_config()
     c, _ = cert_paths()
-    info = {'source': 'letsencrypt' if c.startswith(LE_DIR) else 'self-signed', 'not_after': '', 'days_left': None}
+    info = {'source': 'letsencrypt' if c.startswith(LE_DIR) else 'self-signed', 'not_after': '', 'days_left': None,
+            'mode': cfg['tls_mode'], 'cert_for': cfg.get('cert_for', ''), 'dns': dns_check(cfg)}
+    san = run(['openssl', 'x509', '-noout', '-ext', 'subjectAltName', '-in', c]).stdout
+    info['names'] = re.findall(r'(?:DNS|IP Address):([^,\s]+)', san)
+    try:
+        kind, value = cert_target(cfg)
+        info['target'] = f'{kind}:{value}'
+    except ValueError:
+        info['target'] = ''
     end = run(['openssl', 'x509', '-noout', '-enddate', '-in', c]).stdout.strip().partition('=')[2]
     if end:
         info['not_after'] = end
@@ -605,18 +675,43 @@ def tail_file(path, n):
         return ''
 
 
-def certbot_args(cfg, force=False):
-    if not cfg.get('domain'):
-        raise ValueError('сначала укажите домен')
-    if re.fullmatch(r'[\d.:]+', cfg['domain']):
-        raise ValueError('Let\'s Encrypt здесь выпускается только для домена, не для IP')
-    args = [CERTBOT, 'certonly', '--standalone', '--non-interactive', '--agree-tos',
-            '--config-dir', LE_DIR, '--work-dir', os.path.join(LE_DIR, 'work'), '--logs-dir', os.path.join(LE_DIR, 'logs'),
-            '-d', cfg['domain'], '--cert-name', cfg['domain'],
-            '--pre-hook', PRE_HOOK, '--post-hook', POST_HOOK]
+LE_ARGS = ['--config-dir', LE_DIR, '--work-dir', os.path.join(LE_DIR, 'work'), '--logs-dir', os.path.join(LE_DIR, 'logs')]
+
+
+def issue_cert(force=False, if_needed=False):
+    """Выпуск Let's Encrypt на IP (профиль shortlived, 6 дней) или на домен. Вывод certbot — в stdout."""
+    cfg = load_config()
+    if cfg['tls_mode'] == 'self':
+        if if_needed:
+            return
+        raise ValueError('выбран самоподписанный сертификат')
+    kind, value = cert_target(cfg)
+    target = f'{kind}:{value}'
+    lineage = os.path.join(LE_DIR, 'live', CERT_NAME, 'fullchain.pem')
+    if if_needed and cfg.get('cert_for') == target and os.path.exists(lineage):
+        return
+    print(f"=== {datetime.now().isoformat(timespec='seconds')}: Let's Encrypt на {value} ===", flush=True)
+    if os.path.exists(os.path.join(LE_DIR, 'renewal', f'{CERT_NAME}.conf')) and cfg.get('cert_for') != target:
+        # цепочка выпущена на другой адрес — certbot не меняет его без вопроса, поэтому заново
+        subprocess.run([CERTBOT, *LE_ARGS, 'delete', '--cert-name', CERT_NAME, '--non-interactive'])
+    args = [CERTBOT, *LE_ARGS, 'certonly', '--standalone', '--non-interactive', '--agree-tos', '--cert-name', CERT_NAME,
+            '--key-type', 'ecdsa', '--pre-hook', PRE_HOOK, '--post-hook', POST_HOOK]
     args += ['-m', cfg['le_email']] if cfg.get('le_email') else ['--register-unsafely-without-email']
+    args += ['--preferred-profile', 'shortlived', '--ip-address', value] if kind == 'ip' else ['-d', value]
     args += ['--force-renewal'] if force else ['--keep-until-expiring']
-    return args
+    if subprocess.run(args).returncode != 0:
+        raise RuntimeError("Let's Encrypt не выдал сертификат. Частая причина — порт 80 закрыт снаружи "
+                           '(firewall в панели хостера) или домен указывает не на этот сервер.')
+    if kind == 'ip':
+        # 6-дневный сертификат: продлевать за 3 дня до конца (таймер проверяет дважды в сутки)
+        rc = os.path.join(LE_DIR, 'renewal', f'{CERT_NAME}.conf')
+        with open(rc, encoding='utf-8') as f:
+            lines = [ln for ln in f.read().splitlines() if not ln.startswith('renew_before_expiry')]
+        lines.insert(1, 'renew_before_expiry = 3 days')
+        with open(rc, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(lines) + '\n')
+    update_config(cert_for=target)
+    print(f'Сертификат на {value} выпущен', flush=True)
 
 
 def unit_active(unit):
@@ -626,13 +721,12 @@ def unit_active(unit):
 def start_cert(force):
     if unit_active(CERT_STATE['unit']):
         raise RuntimeError('certbot уже работает')
-    args = certbot_args(load_config(), force)
+    cert_target(load_config())  # ошибку настроек — сразу в панель, а не в журнал certbot
     unit = f'tgam-certbot-{int(time.time())}'
-    with open(CERT_LOG, 'a', encoding='utf-8') as f:
-        f.write(f"\n=== {datetime.now().isoformat(timespec='seconds')} ===\n")
     # отдельный transient-юнит: перезапуск панели не оборвёт certbot между pre- и post-hook
     r = run(['systemd-run', f'--unit={unit}', '--collect',
-             '-p', f'StandardOutput=append:{CERT_LOG}', '-p', f'StandardError=append:{CERT_LOG}', *args])
+             '-p', f'StandardOutput=append:{CERT_LOG}', '-p', f'StandardError=append:{CERT_LOG}',
+             sys.executable, os.path.abspath(__file__), 'cert-issue', *(['--force'] if force else [])])
     if r.returncode != 0:
         raise RuntimeError(r.stderr.strip() or 'systemd-run failed')
     CERT_STATE['unit'] = unit
@@ -692,9 +786,14 @@ def apply_restore(data):
     else:
         raise ValueError('это не бэкап TG Alerts Manager')
     cfg = load_config()
+    # IP и сертификат принадлежат этой машине — при переезде на новый сервер они свои
     for k in DEFAULTS:
-        if k in src and k not in ('session_key', 'backup_last'):
+        if k in src and k not in ('session_key', 'backup_last', 'public_ip', 'cert_for'):
             cfg[k] = src[k]
+    if is_ip(cfg.get('domain')):  # бэкап 1.0: в domain лежал IP старого сервера
+        cfg['domain'] = ''
+    elif cfg.get('domain') and 'tls_mode' not in src:
+        cfg['tls_mode'] = 'domain'
     save_config(cfg)
     try:
         write_xray(cfg.get('vless') or '')
@@ -789,6 +888,8 @@ def state():
     return {
         'ok': True,
         'domain': cfg['domain'],
+        'tls_mode': cfg['tls_mode'],
+        'public_ip': cfg['public_ip'],
         'host': public_host(cfg),
         'hook_url': f"https://{public_host(cfg)}:{cfg['hook_port']}{HOOK_PATH}",
         'bot_token': mask(cfg['bot_token']),
@@ -940,16 +1041,23 @@ def api_settings(b):
     cfg = load_config()
     if b.get('bot_token', '').strip():
         cfg['bot_token'] = b['bot_token'].strip()
-    for k in ('chat_id', 'default_thread', 'webhook_secret', 'le_email', 'domain', 'backup_chat_id',
-              'fmt_firing', 'fmt_resolved', 'label_titles', 'link_titles'):
+    for k in ('chat_id', 'default_thread', 'webhook_secret', 'le_email', 'domain', 'public_ip', 'tls_mode',
+              'backup_chat_id', 'fmt_firing', 'fmt_resolved', 'label_titles', 'link_titles'):
         if k in b:
             cfg[k] = str(b[k]).strip()
     if cfg['default_thread'] and not cfg['default_thread'].isdigit():
         raise ValueError('тред по умолчанию — число')
     if cfg['backup_chat_id'] and not re.fullmatch(r'-?\d+', cfg['backup_chat_id']):
         raise ValueError('получатель бэкапа — числовой id пользователя (бот пришлёт его в ответ на /start)')
-    if cfg['domain'] and not re.fullmatch(r'[A-Za-z0-9.:-]+', cfg['domain']):
-        raise ValueError('домен — только имя хоста, без https:// и порта')
+    cfg['domain'] = re.sub(r'^https?://|[:/].*$', '', cfg['domain']).lower()
+    if cfg['domain'] and not re.fullmatch(r'[a-z0-9-]+(\.[a-z0-9-]+)+', cfg['domain']):
+        raise ValueError('домен — имя вида alerts.example.com, без https:// и порта')
+    if cfg['public_ip'] and not is_ip(cfg['public_ip']):
+        raise ValueError('IP сервера указан неверно')
+    if cfg['tls_mode'] not in ('ip', 'domain', 'self'):
+        raise ValueError('сертификат: ip, domain или self')
+    if cfg['tls_mode'] == 'domain' and not cfg['domain']:
+        raise ValueError('для сертификата на домен укажите домен')
     if 'tz_offset' in b:
         cfg['tz_offset'] = float(b['tz_offset'] or 0)
     if 'backup_hours' in b:
@@ -1001,11 +1109,19 @@ def api_cert(b):
     start_cert(bool(b.get('force')))
 
 
-def api_password(b):
-    pw = str(b.get('password', ''))
+def check_login(user, pw):
+    if not re.fullmatch(r'[A-Za-z0-9._@-]{1,32}', user):
+        raise ValueError('логин — латиница, цифры и . _ @ -, до 32 символов')
     if len(pw) < 8:
-        raise ValueError('минимум 8 символов')
-    update_config(panel_pass_hash=hash_pw(pw))  # подпись сессий включает хеш пароля — все сессии сбрасываются
+        raise ValueError('пароль — минимум 8 символов')
+
+
+def api_password(b):
+    cfg = load_config()
+    user, pw = str(b.get('user') or cfg['panel_user']).strip(), str(b.get('password', ''))
+    check_login(user, pw)
+    # подпись сессий включает логин и хеш пароля — все сессии сбрасываются
+    update_config(panel_user=user, panel_pass_hash=hash_pw(pw))
 
 
 def api_backup_send(b):
@@ -1259,13 +1375,28 @@ def cmd_init():
                       ('le_email', 'LE_EMAIL'), ('domain', 'DOMAIN')):
         if env.get(name):
             cfg[key] = env[name].strip()
-    if not cfg['domain'] and env.get('PUBLIC_HOST'):
-        cfg['domain'] = env['PUBLIC_HOST'].strip()
+    if env.get('PUBLIC_HOST') and not cfg['public_ip']:
+        cfg['public_ip'] = env['PUBLIC_HOST'].strip()
+    if env.get('TGAM_TLS'):
+        if env['TGAM_TLS'] not in ('ip', 'domain', 'self'):
+            sys.exit('TGAM_TLS: ip, domain или self')
+        cfg['tls_mode'] = env['TGAM_TLS']
+    elif env.get('DOMAIN'):
+        cfg['tls_mode'] = 'domain'
     for key, name in (('panel_port', 'PANEL_PORT'), ('hook_port', 'HOOK_PORT')):
         if env.get(name):
             cfg[key] = int(env[name])
     pw = None
-    if not cfg['panel_pass_hash'] or env.get('RESET_PASSWORD') == '1':
+    if env.get('PANEL_PASS'):  # логин и пароль, заданные при установке
+        user = (env.get('PANEL_USER') or cfg['panel_user']).strip()
+        try:
+            check_login(user, env['PANEL_PASS'])
+        except ValueError as ex:
+            sys.exit(str(ex))
+        cfg['panel_user'], cfg['panel_pass_hash'] = user, hash_pw(env['PANEL_PASS'])
+    elif not cfg['panel_pass_hash'] or env.get('RESET_PASSWORD') == '1':
+        if env.get('PANEL_USER'):
+            cfg['panel_user'] = env['PANEL_USER'].strip()
         pw = secrets.token_urlsafe(12)
         cfg['panel_pass_hash'] = hash_pw(pw)
     if not cfg['session_key']:
@@ -1296,6 +1427,13 @@ def cmd_restore():
     print('Конфиг восстановлен, панель перезапущена')
 
 
+def cmd_cert_issue():
+    try:
+        issue_cert(force='--force' in sys.argv, if_needed='--if-needed' in sys.argv)
+    except (ValueError, RuntimeError) as ex:
+        sys.exit(f'!! {ex}')
+
+
 def cmd_url():
     cfg = load_config()
     print(f"Панель: https://{public_host(cfg)}:{cfg['panel_port']}  (логин {cfg['panel_user']})")
@@ -1305,8 +1443,7 @@ def cmd_url():
 if __name__ == '__main__':
     cmd = sys.argv[1] if len(sys.argv) > 1 else 'serve'
     cmds = {'serve': serve, 'init': cmd_init, 'xray-config': cmd_xray_config, 'restore': cmd_restore, 'url': cmd_url,
-            'version': lambda: print(VERSION),
-            'certbot-args': lambda: print('\0'.join(certbot_args(load_config())))}
+            'version': lambda: print(VERSION), 'cert-issue': cmd_cert_issue}
     if cmd not in cmds:
         sys.exit(f"неизвестная команда {cmd}; есть: {', '.join(cmds)}")
     cmds[cmd]()

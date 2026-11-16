@@ -4,8 +4,9 @@
 #   bash <(curl -fsSL https://github.com/deluwr/tg-alerts-manager/releases/latest/download/install.sh)
 #
 # Повторный запуск обновляет до последнего релиза; конфиг в /var/lib/tg-alerts-manager сохраняется.
-# Необязательные переменные: DOMAIN, BOT_TOKEN, CHAT_ID, VLESS, LE_EMAIL, PANEL_PORT, HOOK_PORT,
-#   RESET_PASSWORD=1, TGAM_VERSION=v1.0.0 (конкретный релиз), TGAM_RESTORE=/путь/к/бэкапу.json
+# При первой установке спрашивает логин и пароль панели и на что выпускать сертификат (IP / домен / самоподписанный).
+# Без вопросов: PANEL_USER, PANEL_PASS, TGAM_TLS=ip|domain|self, DOMAIN, LE_EMAIL. Ещё: BOT_TOKEN, CHAT_ID, VLESS,
+#   PANEL_PORT, HOOK_PORT, TGAM_VERSION=v1.1.0 (конкретный релиз), TGAM_RESTORE=/путь/к/бэкапу.json
 set -euo pipefail
 
 REPO=${TGAM_REPO:-deluwr/tg-alerts-manager}
@@ -16,6 +17,15 @@ PROXY_PORT=17777
 
 log() { printf '\033[1;32m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31m!!\033[0m %s\n' "$*" >&2; exit 1; }
+tty_ok() { { : < /dev/tty; } 2>/dev/null; }
+# Вопрос в терминал (работает и при bash <(curl …)): ask "вопрос" [по умолчанию]
+ask() {
+  local a=''
+  while read -r -t 0.05 _ < /dev/tty 2>/dev/null; do :; done  # не принимать за ответ то, что набрано заранее
+  read -r -p "$1" a < /dev/tty || true
+  a=${a//$'\r'/}
+  printf '%s' "${a:-${2:-}}"
+}
 
 [ "$(id -u)" = 0 ] || die "Запускайте от root"
 command -v systemctl >/dev/null || die "Нужен Linux с systemd"
@@ -85,9 +95,10 @@ echo "TG Alerts Manager $VERSION ($ver)"
 # certbot в собственном venv: не зависит от системных пакетов и не трогает системный certbot
 log "certbot"
 CERTBOT="$APP_DIR/certbot-venv/bin/certbot"
-if [ ! -x "$CERTBOT" ]; then
-  python3 -m venv "$APP_DIR/certbot-venv"
-  "$APP_DIR/certbot-venv/bin/pip" install -q --disable-pip-version-check certbot
+[ -x "$CERTBOT" ] || python3 -m venv "$APP_DIR/certbot-venv"
+# сертификаты на IP требуют certbot ≥ 5.4
+if ! "$CERTBOT" --version 2>/dev/null | awk '{split($2, v, "."); exit !(v[1] > 5 || (v[1] == 5 && v[2] >= 4))}'; then
+  "$APP_DIR/certbot-venv/bin/pip" install -q --disable-pip-version-check -U 'certbot>=5.4'
 fi
 "$CERTBOT" --version
 
@@ -153,21 +164,58 @@ rm -f "$STATE"
 EOF
 chmod 700 "$APP_DIR/hooks/"*.sh
 
-log "Конфиг"
-PUBLIC_HOST=""
-if [ -z "${DOMAIN:-}" ] && [ ! -f "$DATA_DIR/config.json" ]; then
-  PUBLIC_HOST=$(curl -4 -fsS --max-time 8 https://api.ipify.org 2>/dev/null || true)
-  [ -n "$PUBLIC_HOST" ] || PUBLIC_HOST=$(ip -4 route get 1.1.1.1 2>/dev/null | grep -o 'src [0-9.]*' | cut -d' ' -f2 || true)
+FRESH=1
+[ -f "$DATA_DIR/config.json" ] && FRESH=0
+PUBLIC_HOST=$(curl -4 -fsS --max-time 8 https://api.ipify.org 2>/dev/null || true)
+[ -n "$PUBLIC_HOST" ] || PUBLIC_HOST=$(ip -4 route get 1.1.1.1 2>/dev/null | grep -o 'src [0-9.]*' | cut -d' ' -f2 || true)
+PANEL_USER=${PANEL_USER:-}
+PANEL_PASS=${PANEL_PASS:-}
+TGAM_TLS=${TGAM_TLS:-}
+DOMAIN=${DOMAIN:-}
+LE_EMAIL=${LE_EMAIL:-}
+
+if [ "$FRESH" = 1 ] && tty_ok; then
+  if [ -z "$PANEL_PASS" ]; then
+    log "Вход в панель"
+    PANEL_USER=$(ask "  Логин [${PANEL_USER:-admin}]: " "${PANEL_USER:-admin}")
+    while :; do
+      p1=''; p2=''
+      read -r -s -p "  Пароль (Enter — сгенерировать): " p1 < /dev/tty || true; echo
+      [ -z "$p1" ] && break
+      if [ ${#p1} -lt 8 ]; then echo "  минимум 8 символов"; continue; fi
+      read -r -s -p "  Повторите пароль: " p2 < /dev/tty || true; echo
+      if [ "$p1" = "$p2" ]; then PANEL_PASS=$p1; break; fi
+      echo "  пароли не совпали"
+    done
+  fi
+  if [ -z "$TGAM_TLS" ]; then
+    log "Сертификат HTTPS"
+    echo "  1) Let's Encrypt на IP ${PUBLIC_HOST:-сервера} — без домена, на 6 дней, продлевается сам"
+    echo "  2) Let's Encrypt на домен — A-запись домена должна указывать на этот сервер (без прокси Cloudflare)"
+    echo "  3) Самоподписанный — браузер и Grafana будут предупреждать"
+    def=1
+    [ -n "$DOMAIN" ] && def=2
+    case "$(ask "  Выберите [$def]: " "$def")" in
+      2) TGAM_TLS=domain
+         DOMAIN=$(ask "  Домен${DOMAIN:+ [$DOMAIN]}: " "$DOMAIN")
+         [ -n "$DOMAIN" ] || die "домен не указан" ;;
+      3) TGAM_TLS=self ;;
+      *) TGAM_TLS=ip ;;
+    esac
+    if [ "$TGAM_TLS" != self ]; then
+      [ -n "$LE_EMAIL" ] || LE_EMAIL=$(ask "  E-mail для уведомлений Let's Encrypt (Enter — без): ")
+      echo "  Выпуск сертификата означает согласие с условиями Let's Encrypt: https://letsencrypt.org/repository/"
+    fi
+  fi
 fi
-init_out=$(PUBLIC_HOST="$PUBLIC_HOST" python3 "$APP_DIR/app/app.py" init)
+
+log "Конфиг"
+init_out=$(PANEL_USER="$PANEL_USER" PANEL_PASS="$PANEL_PASS" TGAM_TLS="$TGAM_TLS" DOMAIN="$DOMAIN" LE_EMAIL="$LE_EMAIL" \
+           PUBLIC_HOST="$PUBLIC_HOST" python3 "$APP_DIR/app/app.py" init)
 val() { sed -n "s/^$1=//p" <<<"$init_out"; }
 python3 "$APP_DIR/app/app.py" xray-config
-read -r PANEL_PORT HOOK_PORT DOMAIN_CFG < <(python3 - "$DATA_DIR/config.json" <<'PY'
-import json, sys
-c = json.load(open(sys.argv[1]))
-print(c['panel_port'], c['hook_port'], c.get('domain') or '-')
-PY
-)
+cfg_vals() { python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(c["panel_port"], c["hook_port"], c.get("tls_mode") or "self")' "$DATA_DIR/config.json"; }
+read -r PANEL_PORT HOOK_PORT TLS_MODE < <(cfg_vals)
 
 # порты должны быть свободны или заняты самой панелью
 for p in "$PANEL_PORT" "$HOOK_PORT"; do
@@ -231,20 +279,32 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 EOF
-cat > /usr/local/bin/tgam <<EOF
+cat > /usr/local/bin/tgam <<'EOF'
 #!/bin/bash
 # TG Alerts Manager: команды на сервере
-APP=$APP_DIR
-case "\${1:-}" in
-  ""|url) $PY \$APP/app/app.py url ;;
-  update) bash \$APP/install.sh ;;
-  password) RESET_PASSWORD=1 $PY \$APP/app/app.py init | sed -n 's/^PANEL_PASSWORD=/Новый пароль: /p'; systemctl restart tgam ;;
-  restore) [ -f "\${2:-}" ] || { echo "tgam restore <файл бэкапа.json>"; exit 1; }; $PY \$APP/app/app.py restore "\$2" ;;
+APP=@APP@
+DATA=@DATA@
+PY=@PY@
+case "${1:-}" in
+  ""|url) "$PY" "$APP/app/app.py" url ;;
+  update) bash "$APP/install.sh" ;;
+  password)
+    read -r -p "Логин (Enter — прежний): " u < /dev/tty || true
+    read -r -s -p "Новый пароль (Enter — сгенерировать): " p < /dev/tty || true; echo
+    if [ -n "$p" ]; then
+      PANEL_USER="$u" PANEL_PASS="$p" "$PY" "$APP/app/app.py" init >/dev/null && echo "Логин и пароль изменены"
+    else
+      PANEL_USER="$u" RESET_PASSWORD=1 "$PY" "$APP/app/app.py" init | sed -n 's/^PANEL_PASSWORD=/Новый пароль: /p'
+    fi
+    systemctl restart tgam ;;
+  cert) "$PY" "$APP/app/app.py" cert-issue "${@:2}" 2>&1 | tee -a "$DATA/certbot.log" ;;
+  restore) [ -f "${2:-}" ] || { echo "tgam restore <файл бэкапа.json>"; exit 1; }; "$PY" "$APP/app/app.py" restore "$2" ;;
   logs) journalctl -u tgam -f ;;
-  version) $PY \$APP/app/app.py version ;;
-  *) echo "tgam [url|update|password|restore <файл>|logs|version]"; exit 1 ;;
+  version) "$PY" "$APP/app/app.py" version ;;
+  *) echo "tgam [url|update|password|cert [--force]|restore <файл>|logs|version]"; exit 1 ;;
 esac
 EOF
+sed -i "s|@APP@|$APP_DIR|; s|@DATA@|$DATA_DIR|; s|@PY@|$PY|" /usr/local/bin/tgam
 chmod 755 /usr/local/bin/tgam
 
 systemctl daemon-reload
@@ -254,26 +314,24 @@ systemctl enable -q --now tgam-certbot-renew.timer
 if [ -n "${TGAM_RESTORE:-}" ]; then
   log "Восстановление из $TGAM_RESTORE"
   python3 "$APP_DIR/app/app.py" restore "$TGAM_RESTORE"
-  read -r PANEL_PORT HOOK_PORT DOMAIN_CFG < <(python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(c["panel_port"], c["hook_port"], c.get("domain") or "-")' "$DATA_DIR/config.json")
+  read -r PANEL_PORT HOOK_PORT TLS_MODE < <(cfg_vals)
 fi
 systemctl restart tgam-xray tgam
 
 if command -v ufw >/dev/null && [[ $(ufw status) == *"Status: active"* ]]; then
-  log "ufw: открываю $PANEL_PORT и $HOOK_PORT"
+  log "ufw: открываю $PANEL_PORT, $HOOK_PORT$([ "$TLS_MODE" != self ] && echo ' и 80 (проверка Let'"'"'s Encrypt)')"
   ufw allow "$PANEL_PORT/tcp" >/dev/null
   ufw allow "$HOOK_PORT/tcp" >/dev/null
+  [ "$TLS_MODE" = self ] || ufw allow 80/tcp >/dev/null
 fi
 
-if [ "$UPDATE" != 1 ] && [ "$DOMAIN_CFG" != "-" ] && [[ ! "$DOMAIN_CFG" =~ ^[0-9.:]+$ ]] \
-   && [ ! -f "$DATA_DIR/letsencrypt/live/$DOMAIN_CFG/fullchain.pem" ]; then
-  log "Сертификат Let's Encrypt для $DOMAIN_CFG"
-  command -v ufw >/dev/null && [[ $(ufw status) == *"Status: active"* ]] && ufw allow 80/tcp >/dev/null
-  mapfile -d '' args < <(python3 "$APP_DIR/app/app.py" certbot-args)
-  args[-1]=${args[-1]%$'\n'}
-  if "${args[@]}" >> "$DATA_DIR/certbot.log" 2>&1; then
-    echo "Сертификат выпущен, панель подхватит его без перезапуска"
+# сертификат выпускается, только если его нет или он выпущен на другой адрес; обновление его не трогает
+if [ "$UPDATE" != 1 ] && [ "$TLS_MODE" != self ]; then
+  log "Сертификат Let's Encrypt"
+  if python3 "$APP_DIR/app/app.py" cert-issue --if-needed 2>&1 | tee -a "$DATA_DIR/certbot.log"; then
+    echo "Сертификат в порядке, панель подхватывает его без перезапуска"
   else
-    echo "!! certbot не смог выпустить сертификат (журнал: $DATA_DIR/certbot.log) — пока самоподписанный, повторите из панели"
+    echo "!! Сертификат не выпущен — пока работает самоподписанный. Повторить: раздел «сертификат» в панели или tgam cert"
   fi
 fi
 
@@ -288,8 +346,10 @@ fi
 log "Готово: TG Alerts Manager $VERSION"
 python3 "$APP_DIR/app/app.py" url
 if [ -n "${TGAM_RESTORE:-}" ]; then
-  echo "Пароль:  прежний, из бэкапа (сброс: tgam password)"
+  echo "Пароль:  прежний, из бэкапа (сменить: tgam password)"
 elif [ -n "$(val PANEL_PASSWORD)" ]; then
-  echo "Пароль:  $(val PANEL_PASSWORD)   ← сохраните, повторно не показывается (сброс: tgam password)"
+  echo "Пароль:  $(val PANEL_PASSWORD)   ← сохраните, повторно не показывается (сменить: tgam password)"
+elif [ -n "$PANEL_PASS" ]; then
+  echo "Пароль:  заданный при установке"
 fi
-echo "Команды: tgam url | update | password | restore <файл> | logs"
+echo "Команды: tgam url | update | password | cert | restore <файл> | logs"
