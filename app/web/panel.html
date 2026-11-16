@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TG Alerts Manager</title>
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0B0F0E">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Onest:wght@400;500;600;700&display=swap">
+<script>
+try{const t=localStorage.getItem('tgam.theme')||'system';document.documentElement.dataset.palette=t==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'pult-light':'pult'):t}catch(e){}
+</script>
+<style>
+/* «Пульт» — оформление как в Эскадре: моноширинные подписи, прямые углы, один сигнальный цвет. */
+:root,[data-palette='pult']{--bg:#0B0F0E;--surface:#111816;--surface2:#18211E;--line:#24302B;--text:#D5DED9;--muted:#93A39B;--accent:#7EE0A1;--accent-ink:#0B0F0E;--ok:#5FD08A;--warn:#E8B04B;--fail:#F07A6A;--info:#7FB8F0;--code:#070A09;--code-text:#CFE3D6;color-scheme:dark}
+[data-palette='pult-light']{--bg:#F3F5F2;--surface:#FFFFFF;--surface2:#E6EBE5;--line:#C9D3CB;--text:#13201A;--muted:#4E5F56;--accent:#1E7A46;--accent-ink:#FFFFFF;--ok:#1E7A46;--warn:#925400;--fail:#B3261E;--info:#1F5FC4;--code:#0F1714;--code-text:#D5E8DC;color-scheme:light}
+[data-palette='chart']{--bg:#0D1B26;--surface:#12232F;--surface2:#1B2F3D;--line:#21384A;--text:#E4ECF2;--muted:#8FA3B4;--accent:#E8B04B;--accent-ink:#1D1404;--ok:#4CC79A;--warn:#F39A4B;--fail:#F0766B;--info:#7AB1FF;--code:#08131B;--code-text:#D5DFE7;color-scheme:dark}
+[data-palette='chart-light']{--bg:#EEF3F6;--surface:#FFFFFF;--surface2:#E5EDF2;--line:#CCD9E2;--text:#0F2230;--muted:#4A6070;--accent:#8A5800;--accent-ink:#FFFFFF;--ok:#0E7A50;--warn:#A4500A;--fail:#B8322A;--info:#1F5FC4;--code:#10202C;--code-text:#E3EBF1;color-scheme:light}
+[data-palette='nord']{--bg:#2E3440;--surface:#3B4252;--surface2:#434C5E;--line:#4C566A;--text:#ECEFF4;--muted:#AEB7C6;--accent:#88C0D0;--accent-ink:#2E3440;--ok:#A3BE8C;--warn:#EBCB8B;--fail:#BF616A;--info:#81A1C1;--code:#242933;--code-text:#ECEFF4;color-scheme:dark}
+[data-palette='gruvbox-dark']{--bg:#282828;--surface:#32302F;--surface2:#3C3836;--line:#504945;--text:#EBDBB2;--muted:#BDAE93;--accent:#FABD2F;--accent-ink:#282828;--ok:#B8BB26;--warn:#FE8019;--fail:#FB4934;--info:#83A598;--code:#1D2021;--code-text:#EBDBB2;color-scheme:dark}
+:root,[data-palette]{
+  --accent-bg:color-mix(in srgb,var(--accent) 13%,transparent);
+  --ok-bg:color-mix(in srgb,var(--ok) 13%,transparent);--warn-bg:color-mix(in srgb,var(--warn) 14%,transparent);
+  --fail-bg:color-mix(in srgb,var(--fail) 13%,transparent);--info-bg:color-mix(in srgb,var(--info) 13%,transparent);
+  --mono:'IBM Plex Mono',ui-monospace,monospace;--r:4px}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:'Onest',system-ui,sans-serif;font-size:15px;line-height:1.5}
+h1,h2,h3,p{margin:0}
+h1{font-family:var(--mono);font-size:21px;font-weight:500}
+a{color:var(--info);text-decoration:none}a:hover{text-decoration:underline}
+code,.mono{font-family:var(--mono);font-size:.9em}
+code{background:var(--surface2);padding:.05em .35em;border-radius:3px;overflow-wrap:anywhere}
+::selection{background:color-mix(in srgb,var(--accent) 35%,transparent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+.k{font-size:12.5px;color:var(--muted)}.muted{color:var(--muted)}.small{font-size:13px}
+
+/* шапка: марка, разделы, состояние */
+.topbar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:'brand nav end';align-items:center;column-gap:24px;padding:0 24px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+.brand{grid-area:brand;display:flex;align-items:baseline;gap:12px;color:var(--text)!important;text-decoration:none!important}
+.brand-name{font-family:var(--mono);font-weight:600;font-size:15px;color:var(--accent)}
+.brand-ver{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.topnav{grid-area:nav;display:flex;flex-wrap:wrap;align-items:stretch;column-gap:16px;min-width:0;align-self:stretch}
+.nav{display:flex;align-items:center;min-height:56px;font-family:var(--mono);font-size:13.5px;color:var(--muted)!important;text-decoration:none!important;box-shadow:inset 0 -2px 0 transparent;transition:color 150ms,box-shadow 150ms;white-space:nowrap}
+.nav:hover{color:var(--text)!important}
+.nav.on{color:var(--text)!important;box-shadow:inset 0 -2px 0 var(--accent);font-weight:500}
+.topbar-end{grid-area:end;display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;padding:8px 0}
+.upd{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12.5px;color:var(--accent)}
+@media (max-width:1280px){
+  .topbar{grid-template-columns:auto minmax(0,1fr);grid-template-areas:'brand end' 'nav nav'}
+  .topnav{border-top:1px solid var(--line);margin:0 -24px;padding:0 24px}
+  .nav{min-height:42px}
+}
+.content{padding:24px 28px 48px;display:flex;flex-direction:column;gap:20px;width:100%;max-width:1240px}
+.page{display:flex;flex-direction:column;gap:20px}
+.page-head p{font-size:13.5px;color:var(--muted);margin-top:4px}
+
+/* карточки */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.pad{padding:16px 20px}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 20px;min-height:48px;flex-wrap:wrap;background:color-mix(in srgb,var(--surface2) 55%,var(--surface));border-radius:var(--r) var(--r) 0 0;border-bottom:1px solid var(--line)}
+.card-head h2{font-family:var(--mono);font-size:13.5px;font-weight:600}
+.row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 20px;border-top:1px solid var(--line);flex-wrap:wrap}
+.card-head+.row{border-top:0}
+.row-text{display:flex;flex-direction:column;gap:2px;flex:1 1 300px;min-width:0}
+.grid{display:grid;gap:16px}.g2{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.flex{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.stack{display:flex;flex-direction:column;gap:14px}
+.split{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start}
+.split>.wide{flex:999 1 560px;min-width:0}.split>.narrow{flex:1 1 340px;min-width:0}
+
+/* кнопки, метки, поля */
+.btn{font:inherit;font-family:var(--mono);font-size:13px;font-weight:500;min-height:38px;padding:0 16px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface2);color:var(--text);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;text-decoration:none!important;transition:background-color 150ms,border-color 150ms,filter 150ms,scale 150ms}
+.btn:hover:not(:disabled){filter:brightness(1.08);border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.btn:active:not(:disabled){scale:.96}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.danger{color:var(--fail);border-color:var(--fail-bg);background:var(--fail-bg)}
+.btn.sm{min-height:30px;padding:0 12px;font-size:12.5px}
+.btn.icon{width:30px;min-height:30px;padding:0}
+.tag{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px;font-weight:500;padding:2px 8px;border-radius:3px;background:var(--surface2);color:var(--muted);white-space:nowrap;box-shadow:inset 0 0 0 1px color-mix(in srgb,currentColor 22%,transparent)}
+.tag.ok{background:var(--ok-bg);color:var(--ok)}.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.tag.fail{background:var(--fail-bg);color:var(--fail)}.tag.info{background:var(--info-bg);color:var(--info)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+label.fld{display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--muted);min-width:0}
+.inp{font:inherit;font-size:14px;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:0 12px;min-height:38px;width:100%;transition:border-color 150ms}
+.inp:hover{border-color:color-mix(in srgb,var(--muted) 45%,var(--line))}
+.inp:focus{border-color:var(--accent);outline:none}
+.inp.mono,textarea.inp{font-family:var(--mono);font-size:13px}
+textarea.inp{padding:10px 12px;resize:vertical;min-height:96px;line-height:1.45}
+select.inp{padding-right:28px}
+.cb{display:inline-flex;gap:10px;align-items:center;font-size:14px;min-height:34px;color:var(--text);cursor:pointer;white-space:nowrap}
+input[type='checkbox']{appearance:none;-webkit-appearance:none;width:16px;height:16px;margin:0;flex:none;border:1.5px solid color-mix(in srgb,var(--muted) 70%,var(--line));border-radius:3px;background:var(--bg);cursor:pointer;transition:background-color 120ms,border-color 120ms,box-shadow 120ms}
+input[type='checkbox']:hover{border-color:var(--accent)}
+input[type='checkbox']:checked{background:var(--accent);border-color:var(--accent);box-shadow:inset 0 0 0 2.5px var(--bg)}
+input[type='file']{font-family:var(--mono);font-size:12.5px;color:var(--muted);max-width:100%}
+input[type='file']::file-selector-button{font:inherit;font-weight:500;min-height:30px;padding:0 12px;margin-right:10px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface2);color:var(--text);cursor:pointer}
+.alert{border-radius:var(--r);padding:12px 16px;overflow-wrap:anywhere;font-size:14px;box-shadow:inset 3px 0 0 currentColor}
+.alert.ok{background:var(--ok-bg);color:var(--ok)}.alert.warn{background:var(--warn-bg);color:var(--warn)}
+.alert.fail{background:var(--fail-bg);color:var(--fail)}.alert.info{background:var(--info-bg);color:var(--info)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-family:var(--mono);font-size:11.5px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:8px 16px;border-bottom:1px solid var(--line);white-space:nowrap;background:color-mix(in srgb,var(--surface2) 45%,transparent)}
+td{padding:10px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+pre.code{margin:0;background:var(--code);color:var(--code-text);border-radius:var(--r);border:1px solid var(--line);padding:14px 16px;font:12.5px/1.55 var(--mono);overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px}
+.url{display:flex;gap:8px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:6px 6px 6px 12px;min-width:0}
+.url code{flex:1;background:none;padding:0;font-size:13px;min-width:0}
+.kv{display:grid;grid-template-columns:minmax(120px,170px) 1fr;gap:6px 16px;font-size:14px}
+.kv dt{color:var(--muted);font-family:var(--mono);font-size:12.5px;padding-top:1px}.kv dd{margin:0;min-width:0;overflow-wrap:anywhere}
+
+/* маршруты */
+.route{display:grid;grid-template-columns:40px minmax(0,1fr);gap:16px;padding:16px 20px;border-top:1px solid var(--line)}
+.route:first-child{border-top:0}
+.ord{display:flex;flex-direction:column;align-items:center;gap:4px}
+.ord .num{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:600;padding:2px 0}
+.route-main{display:flex;flex-direction:column;gap:12px;min-width:0}
+.route-top{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.route-top .thr{flex:1 1 320px}
+.thr-in{display:flex;gap:8px}
+.thr-in .inp:first-child{flex:1;min-width:100px}
+.thr-in select{width:auto;max-width:220px;flex:none}
+.tn{font-size:12.5px;color:var(--muted);min-height:18px}
+.route-acts{display:flex;gap:8px;align-items:center;padding-bottom:20px}
+.conds{display:flex;flex-direction:column;gap:8px}
+.cond{display:grid;grid-template-columns:180px minmax(0,1fr) 30px;gap:8px;align-items:start}
+.cond textarea.inp{min-height:38px;height:38px;padding:8px 12px}
+.cond .lab{display:flex;flex-direction:column;gap:6px}
+.cond-head{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.empty{padding:28px 20px;text-align:center;color:var(--muted);font-size:14px}
+.ev{display:grid;grid-template-columns:150px 70px minmax(0,1fr);gap:12px;padding:8px 20px;border-top:1px solid var(--line);font-size:13px}
+.ev:first-child{border-top:0}
+.ev .t{color:var(--muted);font-family:var(--mono);font-size:12px}
+.ev.bad .x{color:var(--fail)}
+#toast{position:fixed;right:16px;bottom:16px;max-width:440px;padding:12px 16px;border-radius:var(--r);background:var(--surface);border:1px solid var(--line);box-shadow:inset 3px 0 0 var(--ok),0 10px 30px rgba(0,0,0,.25);z-index:9;font-size:14px}
+#toast.bad{box-shadow:inset 3px 0 0 var(--fail),0 10px 30px rgba(0,0,0,.25)}
+@media (max-width:700px){
+  .content{padding:20px 16px 40px}.topbar{padding:0 16px}.topnav{margin:0 -16px;padding:0 16px}
+  .topbar{grid-template-columns:minmax(0,1fr);grid-template-areas:'brand' 'end' 'nav';position:static}
+  .brand{padding-top:14px}.topbar-end{justify-content:flex-start;padding:8px 0 12px}
+  .topbar-end .btn{margin-left:auto}#tQ{display:none}
+  .route{grid-template-columns:1fr;padding:14px 16px}.ord{flex-direction:row}
+  .route-acts{padding-bottom:0}
+  .cond{grid-template-columns:minmax(0,1fr) 30px}.cond .lab{grid-column:1/-1}
+  .ev{grid-template-columns:1fr;gap:2px;padding:8px 16px}
+  .kv{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#/routes"><span class="brand-name">tg alerts manager</span><span class="brand-ver" id="ver">…</span></a>
+  <nav class="topnav" id="nav" aria-label="Разделы"></nav>
+  <div class="topbar-end">
+    <a class="upd" id="upd" href="#/panel" hidden><span class="dot"></span><span id="updText"></span></a>
+    <span class="tag" id="tXray">xray</span>
+    <span class="tag" id="tTg">telegram</span>
+    <span class="tag" id="tCert">cert</span>
+    <span class="tag" id="tQ"></span>
+    <button class="btn ghost sm" onclick="logout()">выйти</button>
+  </div>
+</header>
+
+<main class="content">
+
+<section class="page" data-page="routes">
+  <div class="page-head"><h1>Маршруты</h1><p>Алерт уходит в первый подходящий маршрут сверху вниз. Ни один не подошёл — в тред по умолчанию.</p></div>
+  <div class="card">
+    <div class="card-head"><h2>вебхук для grafana</h2><span class="k">Contact point → Webhook, POST</span></div>
+    <div class="pad stack">
+      <div class="url"><code id="hookUrl"></code><button class="btn sm" onclick="copy($('#hookUrl').textContent)">копировать</button></div>
+      <div class="flex" style="align-items:flex-end">
+        <label class="fld" style="flex:1 1 280px">Секрет вебхука <input class="inp mono" id="webhook_secret" placeholder="пусто — без проверки" autocomplete="off" data-lpignore="true"></label>
+        <button class="btn" onclick="saveSecret(this)">сохранить секрет</button>
+      </div>
+      <p class="k">Секрет передаётся заголовком <code>Authorization: Bearer &lt;секрет&gt;</code> или параметром <code>?token=&lt;секрет&gt;</code>.</p>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>маршруты</h2><div class="flex"><button class="btn sm" onclick="addRoute({conditions:[{label:'alertname',values:[]}]})">+ маршрут</button><button class="btn sm pri" onclick="saveRoutes(this)">сохранить</button></div></div>
+    <div id="routes"></div>
+    <div class="row">
+      <div class="row-text"><b class="small">Ни один маршрут не подошёл</b><span class="k">Тред по умолчанию; пусто — General.</span></div>
+      <div class="flex"><input class="inp mono" id="default_thread" placeholder="General" style="width:140px" autocomplete="off" data-lpignore="true"><button class="btn sm" onclick="testThread(this,$('#default_thread').value)">тест</button></div>
+    </div>
+  </div>
+  <p class="k">В маршруте может быть несколько условий — алерт должен совпасть со всеми. Значения внутри условия — по одному в строке, хватит любого; <code>*</code> — маска. Треды в списке — те, где бот уже видел сообщения; нужного нет — отправьте в тему <code>/id</code>.</p>
+</section>
+
+<section class="page" data-page="telegram" hidden>
+  <div class="page-head"><h1>Telegram</h1><p>Бот, группа с темами и чаты, откуда бот получал сообщения.</p></div>
+  <div class="split">
+    <div class="card wide">
+      <div class="card-head"><h2>бот и группа</h2></div>
+      <div class="pad stack">
+        <label class="fld">Токен бота <input class="inp mono" id="bot_token" type="password" autocomplete="new-password" data-lpignore="true"></label>
+        <label class="fld">ID группы (chat_id) <input class="inp mono" id="chat_id" placeholder="-100…" autocomplete="off" data-lpignore="true"></label>
+        <div class="flex"><button class="btn pri" onclick="saveBot(this)">сохранить</button><button class="btn" onclick="check(this)">проверить связь</button></div>
+        <div id="checkRes" class="small muted"></div>
+      </div>
+    </div>
+    <div class="card narrow">
+      <div class="card-head"><h2>как найти id</h2></div>
+      <div class="pad stack small">
+        <p>Добавьте бота в группу с темами. В нужной теме отправьте <code>/id</code> — бот ответит chat_id и thread_id, а тема появится в списке ниже и в маршрутах.</p>
+        <p>Для бэкапов напишите боту в личку <code>/start</code> — он пришлёт ваш id.</p>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>где писали боту</h2><span class="k">сохраняется между перезапусками</span></div>
+    <div class="table-wrap"><table><thead><tr><th>Чат</th><th>Тема</th><th>chat_id</th><th>thread_id</th><th>Последнее</th><th></th></tr></thead><tbody id="seen"></tbody></table></div>
+  </div>
+</section>
+
+<section class="page" data-page="format" hidden>
+  <div class="page-head"><h1>Формат сообщений</h1><p>Заголовок — alertname, затем summary и description, список алертов и ссылки.</p></div>
+  <div class="card">
+    <div class="card-head"><h2>сообщение</h2><button class="btn sm pri" onclick="saveFormat(this)">сохранить</button></div>
+    <div class="pad stack">
+      <div class="grid g2">
+        <label class="fld">Строка состояния — есть активные <input class="inp" id="fmt_firing"></label>
+        <label class="fld">Строка состояния — всё решено <input class="inp" id="fmt_resolved"></label>
+        <label class="fld">Часовой пояс, UTC+ <input class="inp mono" id="tz_offset" type="number" step="0.5" autocomplete="off"></label>
+        <label class="fld">Скрывать labels (через запятую, можно *) <input class="inp mono" id="hide_labels" autocomplete="off"></label>
+        <label class="fld">Заголовки labels — <span class="mono">label=Заголовок</span>, по строке <textarea class="inp" id="label_titles" spellcheck="false"></textarea></label>
+        <label class="fld">Ссылки из annotations — <span class="mono">ключ=Текст ссылки</span> <textarea class="inp" id="link_titles" spellcheck="false"></textarea></label>
+      </div>
+      <p class="k">В блоке алерта: начало, labels с заголовками (в указанном порядке), остальные нескрытые labels, текущее значение. Аннотации со ссылкой (http…) идут ссылками внизу.</p>
+    </div>
+  </div>
+</section>
+
+<section class="page" data-page="proxy" hidden>
+  <div class="page-head"><h1>Подключение</h1><p>Бот ходит в api.telegram.org только через локальный xray (127.0.0.1).</p></div>
+  <div class="card">
+    <div class="card-head"><h2>vless / xray</h2><button class="btn sm pri" onclick="saveVless(this)">применить</button></div>
+    <div class="pad stack">
+      <label class="fld">Ссылка vless://… или JSON outbound / полный конфиг xray <textarea class="inp" id="vless" spellcheck="false" style="min-height:140px"></textarea></label>
+      <p class="k">Пустое поле — напрямую, без прокси.</p>
+      <div id="vlessRes" class="small"></div>
+    </div>
+  </div>
+</section>
+
+<section class="page" data-page="cert" hidden>
+  <div class="page-head"><h1>Сертификат</h1><p>Панель и вебхук работают по HTTPS. Без домена — самоподписанный сертификат.</p></div>
+  <div class="split">
+    <div class="card wide">
+      <div class="card-head"><h2>let's encrypt</h2></div>
+      <div class="pad stack">
+        <dl class="kv" id="certInfo"></dl>
+        <div class="grid g2">
+          <label class="fld">Домен или IP сервера <input class="inp mono" id="domain" placeholder="alerts.example.com" autocomplete="off"></label>
+          <label class="fld">E-mail для Let's Encrypt (необязательно) <input class="inp" id="le_email" autocomplete="off"></label>
+        </div>
+        <div class="flex"><button class="btn pri" onclick="cert(this,false)">выпустить / продлить</button><button class="btn" onclick="cert(this,true)">принудительно</button><button class="btn ghost" onclick="saveDomain(this)">только сохранить домен</button></div>
+        <p class="k">Домен должен указывать на этот сервер. На время проверки certbot останавливает службу на порту 80 и запускает её обратно. Продление — таймер <code>tgam-certbot-renew</code>, дважды в сутки.</p>
+      </div>
+    </div>
+    <div class="card narrow">
+      <div class="card-head"><h2>журнал certbot</h2></div>
+      <div class="pad"><pre class="code" id="certLog">—</pre></div>
+    </div>
+  </div>
+</section>
+
+<section class="page" data-page="backup" hidden>
+  <div class="page-head"><h1>Бэкап</h1><p>Файл с конфигом (бот, маршруты, формат, VLESS, пароль панели) уходит в Telegram указанному пользователю.</p></div>
+  <div class="split">
+    <div class="card wide">
+      <div class="card-head"><h2>бэкап в telegram</h2><button class="btn sm pri" onclick="saveBackup(this)">сохранить</button></div>
+      <div class="pad stack">
+        <div class="grid g2">
+          <label class="fld">Получатель — id пользователя <input class="inp mono" id="backup_chat_id" placeholder="123456789" autocomplete="off" data-lpignore="true"></label>
+          <label class="fld">Как часто, часов (0 — только вручную) <input class="inp mono" id="backup_hours" type="number" min="0" step="1" autocomplete="off"></label>
+        </div>
+        <div class="flex"><button class="btn" onclick="sendBackup(this)">отправить сейчас</button><span class="k" id="backupLast"></span></div>
+        <div class="alert warn small">В бэкапе токен бота и хеш пароля панели. Получатель должен сначала написать боту <code>/start</code> — иначе Telegram не даст боту написать ему.</div>
+      </div>
+    </div>
+    <div class="card narrow">
+      <div class="card-head"><h2>восстановление</h2></div>
+      <div class="pad stack">
+        <p class="small">Загрузите файл бэкапа. Конфиг заменится целиком, панель перезапустится. Подходит и <code>config.json</code> прежних версий.</p>
+        <input type="file" id="restoreFile" accept=".json,application/json" class="small">
+        <div><button class="btn warn" onclick="restore(this)">восстановить</button></div>
+        <p class="k">С консоли: <code>tgam restore файл.json</code>; при установке — <code>TGAM_RESTORE=файл.json</code>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="page" data-page="log" hidden>
+  <div class="page-head"><h1>Журнал</h1><p>Последние события с момента запуска: алерты, отправки, бот, панель.</p></div>
+  <div class="card"><div id="events"></div></div>
+</section>
+
+<section class="page" data-page="panel" hidden>
+  <div class="page-head"><h1>Панель</h1><p>Версия, обновление, пароль и оформление.</p></div>
+  <div class="split">
+    <div class="card wide">
+      <div class="card-head"><h2>обновление</h2><a class="k" id="repoLink" target="_blank" rel="noopener">github</a></div>
+      <div class="pad stack">
+        <dl class="kv" id="updInfo"></dl>
+        <div class="flex"><button class="btn pri" id="updBtn" onclick="doUpdate(this)" hidden>обновить</button><button class="btn" onclick="checkUpdate(this)">проверить сейчас</button></div>
+        <div id="updNotes" class="small" hidden><pre class="code"></pre></div>
+        <div id="updLogBox" hidden><p class="k" style="margin-bottom:8px">журнал обновления</p><pre class="code" id="updLog"></pre></div>
+        <p class="k">Обновление ставит последний релиз с GitHub и перезапускает панель; конфиг и бэкапы не трогаются. С консоли: <code>tgam update</code>.</p>
+      </div>
+    </div>
+    <div class="narrow stack" style="gap:20px">
+      <div class="card">
+        <div class="card-head"><h2>пароль</h2></div>
+        <div class="pad stack">
+          <p class="small">Логин: <code id="panelUser"></code></p>
+          <label class="fld">Новый пароль <input class="inp" id="newpw" type="password" autocomplete="new-password"></label>
+          <div><button class="btn" onclick="setPw(this)">сменить пароль</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>оформление</h2></div>
+        <div class="pad stack">
+          <label class="fld">Цветовая схема <select class="inp" id="theme" onchange="setTheme(this.value)"></select></label>
+          <p class="k">Хранится в этом браузере.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+<div id="toast" hidden></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const PAGES=[['routes','маршруты'],['telegram','telegram'],['format','формат'],['proxy','подключение'],['cert','сертификат'],['backup','бэкап'],['log','журнал'],['panel','панель']];
+const THEMES=[['system','Как в системе'],['pult','Пульт'],['pult-light','Пульт светлый'],['chart','Ночная карта'],['chart-light','Морская карта'],['nord','Nord'],['gruvbox-dark','Gruvbox Dark']];
+let S=null,VER=null,BUSY_RESTART=false;
+
+async function api(path,body){const o={headers:{'X-Requested-With':'tgam'}};if(body!==undefined){o.method='POST';o.headers['Content-Type']='application/json';o.body=JSON.stringify(body)}
+ const r=await fetch(path,o).catch(()=>new Promise(ok=>setTimeout(ok,400)).then(()=>fetch(path,o)));if(r.status===401){location.reload();throw new Error('сессия истекла')}
+ const j=await r.json().catch(()=>({ok:false,error:'HTTP '+r.status}));if(!r.ok||j.ok===false)throw new Error(j.error||('HTTP '+r.status));return j}
+async function logout(){await api('/api/logout',{}).catch(()=>{});location.reload()}
+let tt;function toast(m,ok=true){const t=$('#toast');t.textContent=m;t.className=ok?'':'bad';t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,5000)}
+async function busy(btn,fn){btn&&(btn.disabled=true);try{return await fn()}catch(e){toast(e.message,false)}finally{btn&&(btn.disabled=false)}}
+function copy(t){navigator.clipboard.writeText(t).then(()=>toast('Скопировано'))}
+const fmtDate=ts=>ts?new Date(ts*1000).toLocaleString():'—';
+
+/* разделы */
+$('#nav').innerHTML=PAGES.map(([id,l])=>`<a class="nav" href="#/${id}" data-nav="${id}">${l}</a>`).join('');
+function showPage(){const id=(location.hash.match(/^#\/(\w+)/)||[])[1];const cur=PAGES.some(p=>p[0]===id)?id:'routes';
+ document.querySelectorAll('[data-page]').forEach(s=>s.hidden=s.dataset.page!==cur);
+ document.querySelectorAll('[data-nav]').forEach(a=>{a.classList.toggle('on',a.dataset.nav===cur);a.toggleAttribute('aria-current',a.dataset.nav===cur)})}
+addEventListener('hashchange',showPage);showPage();
+
+/* оформление */
+function themeId(){try{return localStorage.getItem('tgam.theme')||'system'}catch(e){return 'system'}}
+function applyTheme(t){const id=t==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'pult-light':'pult'):t;document.documentElement.dataset.palette=id;
+ const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();bg&&document.querySelector('meta[name="theme-color"]').setAttribute('content',bg)}
+function setTheme(t){try{localStorage.setItem('tgam.theme',t)}catch(e){}applyTheme(t)}
+$('#theme').innerHTML=THEMES.map(([id,n])=>`<option value="${id}">${n}</option>`).join('');$('#theme').value=themeId();applyTheme(themeId());
+matchMedia('(prefers-color-scheme: light)').addEventListener('change',()=>themeId()==='system'&&applyTheme('system'));
+
+/* маршруты */
+let THREADS=[],threadsKey='';
+const LABELS=['alertname','service','grafana_folder'];
+function threadOptions(){return '<option value="">+ тред…</option>'+THREADS.filter(t=>t.thread_id).map(t=>`<option value="${esc(t.thread_id)}">${esc(t.topic||'Тема')} · ${esc(t.thread_id)}</option>`).join('')}
+function splitIds(s){return String(s).split(',').map(x=>x.trim()).filter(Boolean)}
+function threadNames(ids){return ids.map(id=>{const t=THREADS.find(x=>String(x.thread_id)===id);return t?(t.topic||'тред '+id):id+' — нет в списке'}).join(', ')}
+function tnames(inp){inp.closest('.thr').querySelector('.tn').textContent=threadNames(splitIds(inp.value))||'Без треда маршрут выключен (если не отмечен General)'}
+function tsel(sel){const inp=sel.parentElement.querySelector('[data-k=thread_id]'),ids=splitIds(inp.value);if(sel.value&&!ids.includes(sel.value))ids.push(sel.value);inp.value=ids.join(', ');sel.value='';tnames(inp)}
+function testRoute(btn){const d=btn.closest('.route'),ids=splitIds(d.querySelector('[data-k=thread_id]').value);if(d.querySelector('[data-k=general]').checked)ids.push('0');testThread(btn,ids.join(','))}
+function condHTML(c){const lab=c.label||'alertname',custom=!LABELS.includes(lab);
+ return `<div class="cond"><div class="lab"><select class="inp mono" data-k="label" onchange="labelChange(this)">${[...LABELS,'__custom'].map(x=>`<option value="${x}"${(custom?x==='__custom':x===lab)?' selected':''}>${x==='__custom'?'свой label…':x}</option>`).join('')}</select><input class="inp mono" data-k="label_custom" value="${custom?esc(lab):''}" placeholder="имя label"${custom?'':' hidden'}></div><textarea class="inp" data-k="values" rows="1" placeholder="значения, по одному в строке" oninput="grow(this)">${esc((c.values||[]).join('\n'))}</textarea><button class="btn sm icon ghost" title="Убрать условие" onclick="this.closest('.cond').remove()">✕</button></div>`}
+function grow(t){t.style.height='38px';t.style.height=Math.min(t.scrollHeight+2,180)+'px'}
+function labelChange(sel){sel.closest('.cond').querySelector('[data-k=label_custom]').hidden=sel.value!=='__custom'}
+function addCond(btn){const box=btn.closest('.route-main').querySelector('.conds');box.insertAdjacentHTML('beforeend',condHTML({label:'alertname',values:[]}));box.lastElementChild.querySelector('textarea').focus()}
+function addRoute(r){$('#routes .empty')?.remove();const d=document.createElement('div');d.className='route';
+ const conds=r.conditions??(r.label?[{label:r.label,values:r.values??(r.value!=null?[r.value]:[])}]:[]);
+ d.innerHTML=`<div class="ord"><button class="btn sm icon ghost" title="Выше" onclick="moveRoute(this,-1)">▲</button><span class="num"></span><button class="btn sm icon ghost" title="Ниже" onclick="moveRoute(this,1)">▼</button></div>
+ <div class="route-main">
+  <div class="route-top">
+   <label class="fld thr">Тред (thread_id, через запятую)<span class="thr-in"><input class="inp mono" data-k="thread_id" value="${esc(r.thread_id)}" placeholder="12, 34" oninput="tnames(this)" autocomplete="off"><select class="inp" onchange="tsel(this)">${threadOptions()}</select></span><span class="tn"></span></label>
+   <div class="route-acts"><label class="cb"><input type="checkbox" data-k="general"${r.general?' checked':''}> ещё и в General</label><button class="btn sm" onclick="testRoute(this)">тест</button><button class="btn sm danger" onclick="this.closest('.route').remove();renumber()">удалить</button></div>
+  </div>
+  <div class="cond-head"><span>условия — алерт должен совпасть со всеми</span><button class="btn sm ghost" onclick="addCond(this)">+ условие</button></div>
+  <div class="conds">${conds.map(condHTML).join('')}</div>
+ </div>`;
+ $('#routes').append(d);tnames(d.querySelector('[data-k=thread_id]'));d.querySelectorAll('textarea').forEach(grow);renumber()}
+function moveRoute(btn,dir){const d=btn.closest('.route'),sib=dir<0?d.previousElementSibling:d.nextElementSibling;if(!sib||!sib.classList.contains('route'))return;dir<0?sib.before(d):sib.after(d);renumber()}
+function renumber(){const rs=[...document.querySelectorAll('#routes .route')];rs.forEach((d,i)=>d.querySelector('.num').textContent=i+1);if(!rs.length)$('#routes').innerHTML='<div class="empty">Маршрутов нет — все алерты идут в тред по умолчанию.</div>'}
+function routes(){return[...document.querySelectorAll('#routes .route')].map(d=>({thread_id:d.querySelector('[data-k=thread_id]').value,general:d.querySelector('[data-k=general]').checked,
+ conditions:[...d.querySelectorAll('.cond')].map(c=>{const l=c.querySelector('[data-k=label]').value;return{label:l==='__custom'?c.querySelector('[data-k=label_custom]').value.trim():l,values:c.querySelector('[data-k=values]').value.split('\n').map(s=>s.trim()).filter(Boolean)}})}))}
+async function saveRoutes(btn){await busy(btn,async()=>{await api('/api/routes',{routes:routes()});await api('/api/settings',{default_thread:$('#default_thread').value});toast('Маршруты сохранены')})}
+async function testThread(btn,tids){const list=splitIds(tids);if(!list.length)list.push('');
+ await busy(btn,async()=>{for(const t of list)await api('/api/test',{thread_id:t});toast('Тест отправлен: '+list.map(t=>t&&t!=='0'?'тред '+t:'General').join(', '))})}
+
+/* настройки */
+const save=(btn,body,msg)=>busy(btn,async()=>{await api('/api/settings',body);toast(msg||'Сохранено');refresh()});
+function saveSecret(btn){save(btn,{webhook_secret:$('#webhook_secret').value},'Секрет сохранён')}
+function saveBot(btn){busy(btn,async()=>{await api('/api/settings',{bot_token:$('#bot_token').value,chat_id:$('#chat_id').value});$('#bot_token').value='';toast('Сохранено');refresh();check()})}
+function saveFormat(btn){save(btn,Object.fromEntries(['fmt_firing','fmt_resolved','label_titles','link_titles','tz_offset','hide_labels'].map(k=>[k,$('#'+k).value])),'Формат сохранён')}
+function saveDomain(btn){save(btn,{domain:$('#domain').value,le_email:$('#le_email').value})}
+function saveBackup(btn){save(btn,{backup_chat_id:$('#backup_chat_id').value,backup_hours:$('#backup_hours').value})}
+async function sendBackup(btn){await busy(btn,async()=>{await api('/api/settings',{backup_chat_id:$('#backup_chat_id').value,backup_hours:$('#backup_hours').value});await api('/api/backup',{});toast('Бэкап отправлен');refresh()})}
+async function check(btn){await busy(btn,async()=>{$('#checkRes').textContent='проверяю…';try{setTg(await api('/api/check'))}catch(e){setTg({error:e.message})}})}
+function setTg(r){const p=$('#tTg');
+ if(r.error){p.className='tag fail';p.textContent='telegram: ошибка';$('#checkRes').innerHTML=`<div class="alert fail">${esc(r.error)}</div>`;return}
+ p.className='tag '+(r.chat_error?'warn':'ok');p.textContent='telegram '+r.bot;
+ $('#checkRes').innerHTML=r.chat_error?`<div class="alert warn">Бот ${esc(r.bot)} на связи, но группа: ${esc(r.chat_error)}</div>`
+  :r.chat?`<div class="alert ${r.forum?'ok':'warn'}">Бот ${esc(r.bot)} на связи. Группа «${esc(r.chat)}»${r.forum?', темы включены':' — темы ВЫКЛЮЧЕНЫ'}</div>`:`<div class="alert info">Бот ${esc(r.bot)} на связи, chat_id не задан</div>`}
+async function saveVless(btn){await busy(btn,async()=>{$('#vlessRes').textContent='применяю…';const r=await api('/api/vless',{vless:$('#vless').value});
+ $('#vlessRes').innerHTML=r.warning?`<div class="alert warn">xray перезапущен, но: ${esc(r.warning)}</div>`:`<div class="alert ok">xray перезапущен, Telegram доступен: ${esc(r.bot)}</div>`;if(!r.warning)setTg(r);refresh()})}
+async function cert(btn,force){await busy(btn,async()=>{await api('/api/settings',{domain:$('#domain').value,le_email:$('#le_email').value});await api('/api/cert',{force});toast('certbot запущен');refresh()})}
+async function setPw(btn){await busy(btn,async()=>{await api('/api/password',{password:$('#newpw').value});toast('Пароль изменён, войдите заново');setTimeout(()=>location.reload(),1500)})}
+async function restore(btn){const f=$('#restoreFile').files[0];if(!f){toast('Выберите файл бэкапа',false);return}
+ await busy(btn,async()=>{let data;try{data=JSON.parse(await f.text())}catch(e){throw new Error('Файл не JSON')}
+  if(!confirm('Заменить текущий конфиг бэкапом и перезапустить панель?'))return;
+  const r=await api('/api/restore',{data});BUSY_RESTART=true;toast('Восстановлено, панель перезапускается…');
+  setTimeout(()=>{location.href=r.moved?`https://${location.hostname}:${r.panel_port}/`:location.pathname},4000)})}
+function useChat(id){$('#chat_id').value=id;toast('chat_id подставлен — нажмите «сохранить»')}
+function useBackup(id){$('#backup_chat_id').value=id;location.hash='#/backup';toast('Получатель подставлен — нажмите «сохранить»')}
+
+/* обновление */
+async function checkUpdate(btn){await busy(btn,async()=>{const r=await api('/api/update/check',{});S&&(S.update=r.update);renderUpdate(r.update);toast(r.update.error?'GitHub недоступен':r.update.available?'Есть новая версия '+r.update.latest:'Установлена последняя версия',!r.update.error)})}
+async function doUpdate(btn){if(!S||!confirm(`Обновить панель до ${S.update.latest}? Она перезапустится, конфиг сохранится.`))return;
+ await busy(btn,async()=>{await api('/api/update',{});BUSY_RESTART=true;toast('Обновление запущено');$('#updLogBox').hidden=false})}
+function renderUpdate(u){
+ $('#ver').textContent='v'+u.version;$('#repoLink').href='https://github.com/'+u.repo+'/releases';$('#repoLink').textContent=u.repo;
+ $('#upd').hidden=!u.available;$('#updText').textContent='доступна v'+u.latest;
+ $('#updInfo').innerHTML=`<dt>установлена</dt><dd class="mono">v${esc(u.version)}</dd><dt>последняя</dt><dd class="mono">${u.latest?'v'+esc(u.latest):'—'}${u.available?' <span class="tag acc ok">новая</span>':''}</dd>${u.error?`<dt>github</dt><dd class="small" style="color:var(--warn)">${esc(u.error)}</dd>`:''}`;
+ $('#updBtn').hidden=!u.available||u.running;$('#updBtn').textContent='обновить до v'+u.latest;
+ $('#updNotes').hidden=!(u.available&&u.notes);$('#updNotes pre').textContent=u.notes||'';
+ $('#updLogBox').hidden=!(u.running||BUSY_RESTART)&&!u.log;$('#updLog').textContent=u.log||'…'}
+
+/* состояние */
+function render(s,first){S=s;
+ if(VER&&s.update.version!==VER){toast('Панель обновлена до v'+s.update.version);setTimeout(()=>location.reload(),1200)}
+ VER=s.update.version;
+ $('#hookUrl').textContent=s.hook_url;
+ const th=(s.threads||[]).filter(t=>String(t.chat_id)===String(s.chat_id)),tk=JSON.stringify(th);
+ if(tk!==threadsKey){threadsKey=tk;THREADS=th;document.querySelectorAll('#routes .thr-in select').forEach(x=>x.innerHTML=threadOptions());document.querySelectorAll('#routes [data-k=thread_id]').forEach(tnames)}
+ if(first){
+  for(const k of['chat_id','default_thread','webhook_secret','tz_offset','vless','le_email','domain','fmt_firing','fmt_resolved','label_titles','link_titles','backup_chat_id','backup_hours'])$('#'+k).value=s[k]??'';
+  $('#hide_labels').value=(s.hide_labels||[]).join(', ');$('#panelUser').textContent=s.panel_user;
+  $('#bot_token').placeholder=s.bot_token?('задан '+s.bot_token+' — оставьте пустым, чтобы не менять'):'не задан';
+  $('#routes').innerHTML='';(s.routes||[]).forEach(r=>addRoute(r));renumber()}
+ const px=$('#tXray');px.textContent='xray'+(s.vless?'':' · напрямую');px.className='tag '+(s.xray==='active'?(s.vless?'ok':'warn'):'fail');
+ const c=s.cert,pc=$('#tCert');pc.textContent=c.source==='letsencrypt'?`cert · ${c.days_left} дн.`:'cert · самоподписанный';pc.className='tag '+(c.source==='letsencrypt'&&c.days_left>14?'ok':'warn');
+ $('#tQ').textContent='очередь · '+s.queue;$('#tQ').className='tag'+(s.queue>20?' warn':'');
+ $('#certInfo').innerHTML=`<dt>источник</dt><dd>${c.source==='letsencrypt'?'Let\'s Encrypt':'самоподписанный'}</dd><dt>действует до</dt><dd class="mono">${esc(c.not_after||'—')}${c.days_left!=null?` (${c.days_left} дн.)`:''}</dd><dt>порт 80</dt><dd class="mono">${esc(c.port80)}</dd><dt>таймер продления</dt><dd class="mono">${esc(c.timer)}</dd>${c.running?'<dt>certbot</dt><dd style="color:var(--warn)">работает…</dd>':''}`;
+ $('#certLog').textContent=c.log||'—';
+ $('#backupLast').textContent=s.backup_last?'последний: '+fmtDate(s.backup_last):'ещё не отправлялся';
+ const seen=s.threads||[];
+ $('#seen').innerHTML=seen.length?seen.map((x,i)=>{const tid=x.thread_id??0,priv=x.type==='private';
+  return `<tr><td>${esc(x.chat)}${priv?' <span class="tag">личка</span>':''}</td><td>${esc(x.topic||(priv?'':tid?'':'General'))}</td><td class="mono">${esc(x.chat_id)}</td><td class="mono">${priv?'':esc(tid)}</td><td class="small muted">${esc(x.text||'')}</td><td style="white-space:nowrap">${priv?`<button class="btn sm" onclick="useBackup('${esc(x.chat_id)}')">в бэкапы</button>`:`<button class="btn sm" onclick="useChat('${esc(x.chat_id)}')">chat_id</button> <button class="btn sm ghost" onclick="copy('${esc(tid)}')">копировать thread_id</button>`}</td></tr>`}).join('')
+  :'<tr><td colspan="6" class="empty">Пока пусто. Отправьте /id в нужной теме группы.</td></tr>';
+ $('#events').innerHTML=s.events.map(ev=>`<div class="ev ${ev.ok?'':'bad'}"><span class="t">${esc(new Date(ev.t).toLocaleString())}</span><span class="t">${esc(ev.kind)}</span><span class="x">${esc(ev.text)}</span></div>`).join('')||'<div class="empty">Пусто</div>';
+ renderUpdate(s.update)}
+async function refresh(first){try{render(await api('/api/state'),first)}catch(e){if(!BUSY_RESTART)toast(e.message,false)}}
+refresh(true).then(()=>S&&S.bot_token&&check());setInterval(refresh,5000);
+</script>
+</body>
+</html>

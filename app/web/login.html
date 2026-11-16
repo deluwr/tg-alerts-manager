@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TG Alerts Manager — вход</title>
+<meta name="color-scheme" content="dark light">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Onest:wght@400;500;600&display=swap">
+<script>
+try{const t=localStorage.getItem('tgam.theme')||'system';document.documentElement.dataset.palette=t==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'pult-light':'pult'):t}catch(e){}
+</script>
+<style>
+:root,[data-palette='pult']{--bg:#0B0F0E;--surface:#111816;--surface2:#18211E;--line:#24302B;--text:#D5DED9;--muted:#93A39B;--accent:#7EE0A1;--accent-ink:#0B0F0E;--fail:#F07A6A;color-scheme:dark}
+[data-palette='pult-light']{--bg:#F3F5F2;--surface:#FFFFFF;--surface2:#E6EBE5;--line:#C9D3CB;--text:#13201A;--muted:#4E5F56;--accent:#1E7A46;--accent-ink:#FFFFFF;--fail:#B3261E;color-scheme:light}
+[data-palette='chart']{--bg:#0D1B26;--surface:#12232F;--surface2:#1B2F3D;--line:#21384A;--text:#E4ECF2;--muted:#8FA3B4;--accent:#E8B04B;--accent-ink:#1D1404;--fail:#F0766B;color-scheme:dark}
+[data-palette='chart-light']{--bg:#EEF3F6;--surface:#FFFFFF;--surface2:#E5EDF2;--line:#CCD9E2;--text:#0F2230;--muted:#4A6070;--accent:#8A5800;--accent-ink:#FFFFFF;--fail:#B8322A;color-scheme:light}
+:root{--mono:'IBM Plex Mono',ui-monospace,monospace;--r:4px}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:15px/1.5 'Onest',system-ui,sans-serif}
+body{display:grid;place-items:center;padding:16px}
+form{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.head{padding:14px 20px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--surface2) 55%,var(--surface));display:flex;align-items:baseline;gap:10px}
+.brand{font-family:var(--mono);font-weight:600;font-size:15px;color:var(--accent)}
+.sub{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.body{padding:20px;display:flex;flex-direction:column;gap:16px}
+label{display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--muted)}
+input{font:inherit;font-size:14px;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:0 12px;min-height:40px;width:100%;transition:border-color 150ms}
+input:focus{border-color:var(--accent);outline:none}
+button{font:inherit;font-family:var(--mono);font-size:13px;font-weight:600;min-height:40px;border-radius:var(--r);border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer}
+button:disabled{opacity:.6;cursor:wait}
+#err{min-height:20px;color:var(--fail);font-size:13px}
+</style>
+</head>
+<body>
+<form id="f" autocomplete="on">
+  <div class="head"><span class="brand">tg alerts manager</span><span class="sub">вход</span></div>
+  <div class="body">
+    <label>Логин <input name="user" autocomplete="username" required autofocus></label>
+    <label>Пароль <input name="password" type="password" autocomplete="current-password" required></label>
+    <button>Войти</button>
+    <div id="err" role="alert"></div>
+  </div>
+</form>
+<script>
+const f=document.getElementById('f'),err=document.getElementById('err');
+f.onsubmit=async ev=>{ev.preventDefault();const b=f.querySelector('button');b.disabled=true;err.textContent='';
+ const opts={method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'tgam'},body:JSON.stringify({user:f.user.value,password:f.password.value})};
+ try{const r=await fetch('/api/login',opts).catch(()=>new Promise(ok=>setTimeout(ok,400)).then(()=>fetch('/api/login',opts)));
+  const j=await r.json().catch(()=>({}));if(r.ok&&j.ok){location.reload();return}err.textContent=j.error||('Ошибка '+r.status);f.password.select()}
+ catch(e){err.textContent=e.message}finally{b.disabled=false}};
+</script>
+</body>
+</html>
