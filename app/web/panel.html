@@ -151,6 +151,23 @@ textarea.inp.sm{min-height:32px;height:32px;padding:6px 10px;resize:none;overflo
 .cond{display:grid;grid-template-columns:200px minmax(0,1fr) 30px;gap:8px;align-items:start}
 .cond .lab{display:flex;flex-direction:column;gap:6px}
 #rtFilter{width:230px}
+/* последние алерты и разбор маршрутов */
+.al{border-top:1px solid var(--line)}.al:first-child{border-top:0}
+.al-row{display:grid;grid-template-columns:150px 76px minmax(140px,1fr) minmax(0,2.4fr) minmax(120px,auto);gap:12px;align-items:center;padding:10px 20px;cursor:pointer;transition:background-color 150ms}
+.al-row:hover{background:color-mix(in srgb,var(--surface2) 50%,transparent)}
+.al.open>.al-row{background:var(--accent-bg)}
+.al-row .t{color:var(--muted);font-size:12px}
+.al-row b{font-weight:500;font-size:13.5px;overflow-wrap:anywhere}
+.lbls{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
+.lb{font-family:var(--mono);font-size:12px;padding:1px 6px;border-radius:3px;background:var(--bg);border:1px solid var(--line);overflow-wrap:anywhere}
+.lb span{color:var(--muted)}
+.al-dest{font-size:13px;text-align:right}
+.why-list{display:none;padding:10px 20px 14px 20px;border-top:1px dashed var(--line);background:color-mix(in srgb,var(--surface2) 22%,transparent)}
+.al.open .why-list{display:block}
+.why{display:grid;grid-template-columns:36px minmax(0,1fr);gap:8px;padding:3px 0;font-size:13px}
+.why .n{font-family:var(--mono);color:var(--muted)}
+.why .r{min-width:0;overflow-wrap:anywhere}.why .r .mono{color:var(--muted)}
+.why.ok .n,.why.ok b{color:var(--ok)}
 .empty{padding:28px 20px;text-align:center;color:var(--muted);font-size:14px}
 .ev{display:grid;grid-template-columns:150px 70px minmax(0,1fr);gap:12px;padding:8px 20px;border-top:1px solid var(--line);font-size:13px}
 .ev:first-child{border-top:0}
@@ -169,6 +186,8 @@ textarea.inp.sm{min-height:32px;height:32px;padding:6px 10px;resize:none;overflo
   .rt-edit{padding:14px 16px}
   #rtFilter{width:100%}
   .cond{grid-template-columns:minmax(0,1fr) 30px}.cond .lab{grid-column:1/-1}
+  .al-row{grid-template-columns:auto minmax(0,1fr);padding:10px 16px}.al-row .lbls,.al-row .al-dest{grid-column:1/-1;text-align:left}
+  .why-list{padding:10px 16px}
   .ev{grid-template-columns:1fr;gap:2px;padding:8px 16px}
   .kv{grid-template-columns:1fr}
 }
@@ -217,6 +236,19 @@ textarea.inp.sm{min-height:32px;height:32px;padding:6px 10px;resize:none;overflo
     <div class="row">
       <div class="row-text"><b class="small">Ни один маршрут не подошёл</b><span class="k">Тред по умолчанию; пусто — General.</span></div>
       <div class="flex"><input class="inp mono" id="default_thread" placeholder="General" style="width:140px" autocomplete="off" data-lpignore="true"><button class="btn sm" onclick="testThread(this,$('#default_thread').value)">тест</button></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>последние алерты</h2><span class="k">все labels, как их прислала Grafana, и почему выбран маршрут — нажмите на алерт</span></div>
+    <div id="recent"></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>проверить labels</h2><span class="k">по сохранённым маршрутам</span></div>
+    <div class="pad stack">
+      <label class="fld">Labels алерта — «ключ=значение» по строке, JSON или <span class="mono">{service="api", code="500"}</span>
+        <textarea class="inp" id="exLabels" spellcheck="false" style="min-height:80px" placeholder="alertname=ozon_no_incoming_requests&#10;service=ozon-orders"></textarea></label>
+      <div><button class="btn" onclick="explainLabels(this)">проверить</button></div>
+      <div id="exRes"></div>
     </div>
   </div>
   <p class="k">Нажмите на маршрут, чтобы изменить; порядок — перетаскиванием за ⠿ или стрелками. Условия маршрута соединяются «и», значения внутри условия — «или», <code>*</code> — маска. Темы в списке — те, где бот уже видел сообщения; нужной нет — отправьте в неё <code>/id</code>.</p>
@@ -476,6 +508,22 @@ async function saveRoutes(btn){await busy(btn,async()=>{await api('/api/routes',
 async function testThread(btn,tids){const list=splitIds(tids);if(!list.length)list.push('');
  await busy(btn,async()=>{for(const t of list)await api('/api/test',{thread_id:t});toast('Тест отправлен: '+list.map(t=>t&&t!=='0'?'тред '+t:'General').join(', '))})}
 
+/* последние алерты: labels, как их прислала Grafana, и разбор маршрутов */
+let RECENT_KEY='';const OPEN_AL=new Set();
+function destText(ids){return (ids||[]).map(t=>!t||t==='0'?'General':(topicOf(t)?`${topicOf(t)} · ${t}`:'тред '+t)).join(', ')}
+function whyHTML(ex,threads){const rows=ex.map(x=>`<div class="why${x.ok?' ok':''}"><span class="n">#${x.n}</span><span class="r">${x.ok?'<b>подошёл</b>':esc(x.why)} <span class="mono">${esc(x.name)}</span></span></div>`);
+ if(!ex.some(x=>x.ok))rows.push('<div class="why ok"><span class="n">—</span><span class="r"><b>ни один маршрут не подошёл</b> — тред по умолчанию</span></div>');
+ return rows.join('')+`<p class="small" style="margin-top:8px">→ ${esc(destText(threads))}</p>`}
+function lblsHTML(l){return Object.entries(l||{}).filter(([k])=>k!=='alertname').map(([k,v])=>`<span class="lb"><span>${esc(k)}=</span>${esc(v)}</span>`).join('')||'<span class="k">labels нет</span>'}
+function renderRecent(list){list=list||[];const k=list.map(a=>a.id).join(',')+'|'+threadsKey;if(k===RECENT_KEY)return;RECENT_KEY=k;
+ $('#recent').innerHTML=list.length?list.map(a=>`<div class="al${OPEN_AL.has(a.id)?' open':''}" data-id="${a.id}">
+  <div class="al-row" onclick="toggleAl(${a.id})"><span class="t mono">${esc(new Date(a.t).toLocaleString())}</span><span><span class="tag ${a.status==='resolved'?'ok':'fail'}">${esc(a.status||'?')}</span></span><b class="mono">${esc(a.alertname||'—')}</b><span class="lbls">${lblsHTML(a.labels)}</span><span class="al-dest">→ ${esc(destText(a.threads))}</span></div>
+  <div class="why-list">${whyHTML(a.explain,a.threads)}</div></div>`).join('')
+  :'<div class="empty">С запуска сервиса алертов ещё не было.</div>'}
+function toggleAl(id){OPEN_AL.has(id)?OPEN_AL.delete(id):OPEN_AL.add(id);document.querySelector(`.al[data-id="${id}"]`)?.classList.toggle('open')}
+async function explainLabels(btn){await busy(btn,async()=>{const r=await api('/api/explain',{labels:$('#exLabels').value});
+ $('#exRes').innerHTML=`<div class="lbls" style="margin-bottom:10px">${lblsHTML(r.labels)}</div>${whyHTML(r.explain,r.threads)}${DIRTY?'<p class="k" style="margin-top:6px">Есть несохранённые изменения маршрутов — проверка идёт по сохранённым.</p>':''}`})}
+
 /* настройки */
 const save=(btn,body,msg)=>busy(btn,async()=>{await api('/api/settings',body);toast(msg||'Сохранено');refresh()});
 function saveSecret(btn){save(btn,{webhook_secret:$('#webhook_secret').value},'Секрет сохранён')}
@@ -553,6 +601,7 @@ function render(s,first){S=s;
  $('#seen').innerHTML=seen.length?seen.map((x,i)=>{const tid=x.thread_id??0,priv=x.type==='private';
   return `<tr><td>${esc(x.chat)}${priv?' <span class="tag">личка</span>':''}</td><td>${esc(x.topic||(priv?'':tid?'':'General'))}</td><td class="mono">${esc(x.chat_id)}</td><td class="mono">${priv?'':esc(tid)}</td><td class="small muted">${esc(x.text||'')}</td><td style="white-space:nowrap">${priv?`<button class="btn sm" onclick="useBackup('${esc(x.chat_id)}')">в бэкапы</button>`:`<button class="btn sm" onclick="useChat('${esc(x.chat_id)}')">chat_id</button> <button class="btn sm ghost" onclick="copy('${esc(tid)}')">копировать thread_id</button>`}</td></tr>`}).join('')
   :'<tr><td colspan="6" class="empty">Пока пусто. Отправьте /id в нужной теме группы.</td></tr>';
+ renderRecent(s.recent);
  $('#events').innerHTML=s.events.map(ev=>`<div class="ev ${ev.ok?'':'bad'}"><span class="t">${esc(new Date(ev.t).toLocaleString())}</span><span class="t">${esc(ev.kind)}</span><span class="x">${esc(ev.text)}</span></div>`).join('')||'<div class="empty">Пусто</div>';
  renderUpdate(s.update)}
 async function refresh(first){try{render(await api('/api/state'),first)}catch(e){if(!BUSY_RESTART)toast(e.message,false)}}

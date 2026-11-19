@@ -7,6 +7,7 @@ import hmac
 import html
 import http.cookies
 import ipaddress
+import itertools
 import json
 import os
 import queue
@@ -91,6 +92,8 @@ DEFAULTS = {
 
 _cfg_lock = threading.RLock()
 EVENTS = deque(maxlen=300)
+RECENT = deque(maxlen=40)  # последние алерты: все labels и разбор маршрутов — для панели
+_RECENT_ID = itertools.count(1)
 SEND_Q = queue.Queue(maxsize=2000)
 CERT_STATE = {'unit': ''}
 UPD = {'latest': '', 'notes': '', 'checked': 0, 'error': '', 'unit': ''}
@@ -325,21 +328,69 @@ def route_name(r):
     return r.get('name') or '; '.join(f"{label}={' | '.join(vals)}" for label, vals in route_conds(r))
 
 
+def route_targets(r):
+    """Треды маршрута, плюс General ('0'), если отмечено."""
+    threads = [t.strip() for t in str(r.get('thread_id', '')).split(',') if t.strip()]
+    if r.get('general'):
+        threads.append('0')
+    return threads
+
+
+def route_miss(r, labels):
+    """'' — маршрут подходит к алерту, иначе — почему нет.
+    Подходит, если совпали все условия (И); внутри условия — любое значение (ИЛИ), * — маска."""
+    if not route_targets(r):
+        return 'не выбрано, куда отправлять'
+    conds = route_conds(r)
+    if not conds:
+        return 'нет условий'
+    for label, vals in conds:
+        v = labels.get(label)
+        if v is None:
+            return f'в алерте нет label «{label}»'
+        if not any(fnmatch.fnmatchcase(str(v), p) for p in vals):
+            return f"{label} = {v} — нет среди {' | '.join(vals) or '(пусто)'}"
+    return ''
+
+
 def route_threads(labels, cfg):
-    """Первый подходящий маршрут сверху вниз: все его треды, плюс General, если отмечено.
-    Подходит, если совпали все условия (И); внутри условия — любое значение (ИЛИ).
-    Маршрут без тредов, без General или без условий пропускается; 0 — General."""
+    """Первый подходящий маршрут сверху вниз: все его треды; ни один — тред по умолчанию. 0 — General."""
     for r in cfg['routes']:
-        threads = [t.strip() for t in str(r.get('thread_id', '')).split(',') if t.strip()]
-        if r.get('general'):
-            threads.append('0')
-        conds = route_conds(r)
-        if not threads or not conds:
-            continue
-        if all(labels.get(label) is not None and any(fnmatch.fnmatchcase(str(labels[label]), p) for p in vals)
-               for label, vals in conds):
-            return [(t, route_name(r)) for t in threads]
+        if not route_miss(r, labels):
+            return [(t, route_name(r)) for t in route_targets(r)]
     return [(str(cfg.get('default_thread', '')).strip(), 'по умолчанию')]
+
+
+def explain_routes(labels, cfg):
+    """Разбор для панели: маршруты сверху вниз до первого подходящего и почему не подошли остальные."""
+    out = []
+    for i, r in enumerate(cfg['routes']):
+        why = route_miss(r, labels)
+        out.append({'n': i + 1, 'name': route_name(r), 'ok': not why, 'why': why})
+        if not why:
+            break
+    return out
+
+
+def parse_labels(text):
+    """Labels из того, что удобно вставить: JSON-объект, {a="b", c="d"} из Prometheus или «ключ=значение» по строке."""
+    text = str(text or '').strip()
+    if text.startswith('{'):
+        try:
+            j = json.loads(text)
+            if isinstance(j, dict):
+                return {str(k): str(v) for k, v in j.items()}
+        except ValueError:
+            pass
+        pairs = re.findall(r'([A-Za-z_][\w.-]*)\s*=\s*"((?:[^"\\]|\\.)*)"', text)
+        if pairs:
+            return {k: v.replace('\\"', '"') for k, v in pairs}
+    out = {}
+    for part in (text.splitlines() if '\n' in text else text.split(',')):
+        k, sep, v = part.partition('=')
+        if sep and k.strip():
+            out[k.strip()] = v.strip().strip('"')
+    return out
 
 
 def parse_pairs(text):
@@ -448,6 +499,9 @@ def handle_payload(p, origin='alert'):
             groups.setdefault(thread, []).append((a, labels))
         dest = ', '.join(f'{name} ({thread_label(t)})' for t, name in hits)
         log_event('alert', f"{a.get('status')} {labels.get('alertname', '?')} → {dest}")
+        RECENT.appendleft({'id': next(_RECENT_ID), 't': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+                           'status': a.get('status', ''), 'alertname': labels.get('alertname', ''), 'labels': labels,
+                           'threads': [t for t, _ in hits], 'explain': explain_routes(labels, cfg)})
     for thread, items in groups.items():
         for chunk in render_message(items, p, cfg):
             try:
@@ -914,6 +968,7 @@ def state():
         'queue': SEND_Q.qsize(),
         'events': list(EVENTS)[::-1][:150],
         'threads': find_threads()['rows'],
+        'recent': list(RECENT),
         'update': update_info(),
     }
 
@@ -1137,6 +1192,15 @@ def api_restore(b):
     return {'ok': True, 'panel_port': cfg['panel_port'], 'moved': moved}
 
 
+def api_explain(b):
+    labels = b['labels'] if isinstance(b.get('labels'), dict) else parse_labels(b.get('labels'))
+    if not labels:
+        raise ValueError('не вижу labels: вставьте «ключ=значение» по строке, JSON или {a="b"}')
+    cfg = load_config()
+    return {'ok': True, 'labels': labels, 'explain': explain_routes(labels, cfg),
+            'threads': [t for t, _ in route_threads(labels, cfg)]}
+
+
 def api_update(b):
     start_update()
 
@@ -1149,7 +1213,7 @@ def api_update_check(b):
 POST_ROUTES = {
     '/api/settings': api_settings, '/api/routes': api_routes, '/api/vless': api_vless, '/api/test': api_test,
     '/api/cert': api_cert, '/api/password': api_password, '/api/backup': api_backup_send, '/api/restore': api_restore,
-    '/api/update': api_update, '/api/update/check': api_update_check,
+    '/api/update': api_update, '/api/update/check': api_update_check, '/api/explain': api_explain,
 }
 
 

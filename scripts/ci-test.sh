@@ -42,6 +42,11 @@ assert app.route_threads({'alertname': 'b2', 'service': 'api'}, cfg) == [('1', '
 assert app.route_threads({'alertname': 'b2', 'service': 'web'}, cfg)[0][0] == '9', 'И между условиями'
 assert app.route_threads({'grafana_folder': 'F'}, cfg)[0][0] == '0', 'General'
 assert app.route_threads({'alertname': 'legacy'}, cfg)[0][0] == '3', 'старый формат'
+ex = app.explain_routes({'alertname': 'b2', 'grafana_folder': 'F'}, cfg)
+assert [x['ok'] for x in ex] == [False, True] and 'нет label «service»' in ex[0]['why'], ex
+assert 'нет среди' in app.route_miss(cfg['routes'][0], {'alertname': 'zzz', 'service': 'api'})
+for text in ('service=api\ncode=500', '{"service": "api", "code": "500"}', '{service="api", code="500"}', 'service=api, code=500'):
+    assert app.parse_labels(text) == {'service': 'api', 'code': '500'}, (text, app.parse_labels(text))
 for old, want in (({'domain': '1.2.3.4'}, ('self', '1.2.3.4', '', '1.2.3.4')),
                   ({'domain': 'a.example.com', 'public_ip': '5.6.7.8'}, ('domain', '5.6.7.8', 'a.example.com', 'a.example.com'))):
     json.dump(old, open(app.CONFIG_PATH, 'w'))
@@ -90,6 +95,17 @@ code=$(curl -sk -o /dev/null -w '%{http_code}' -X POST --data "$payload" "$HOOK/
 [ "$code" = 401 ] || fail "вебхук без секрета: $code"
 curl -sk -X POST -H 'Authorization: Bearer s3cret' --data "$payload" "$HOOK/api/v1/alerts/webhook" | grep -q '"alerts": 1' || fail "вебхук"
 api GET /api/state | grep -q 'service=api | web (тред 12)' || fail "алерт не ушёл в маршрут"
+state_py '
+a = s["recent"][0]
+assert a["alertname"] == "Test" and a["labels"]["service"] == "api" and a["threads"] == ["12", "34", "0"], a
+assert a["explain"][0]["ok"], a["explain"]
+print("recent ok")'
+api POST /api/explain '{"labels":"alertname=x\ncode=200"}' | python3 -c '
+import json, sys
+r = json.load(sys.stdin)
+assert r["explain"][0]["why"] == "в алерте нет label «service»" and r["threads"] == [""], r
+print("explain ok")'
+api POST /api/explain '{"labels":"  "}' | grep -q 'не вижу labels' || fail "пустые labels"
 
 echo "== бэкап и восстановление"
 python3 - <<'PY' > /tmp/tgam-backup.json
